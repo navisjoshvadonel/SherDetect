@@ -2,9 +2,9 @@ import React from "react";
 import "./globals.css";
 
 export const metadata = {
-  title: "SherDetect — Universal Multi-Domain Document Verification Platform",
+  title: "SherDetect — Autonomous Multi-Domain AI Document Forensic & Verification Engine",
   description:
-    "Multi-Domain Document Verification System — Resumes, Bills, IDs, Credentials & Legal",
+    "SherDetect AI Forensics Suite — Multi-Domain Document Verification System for Resumes, Bills, IDs, Credentials & Legal Contracts",
 };
 
 export default function RootLayout({

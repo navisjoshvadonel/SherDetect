@@ -62,11 +62,11 @@ export const DomainBanner: React.FC<DomainBannerProps> = ({
         <div className="flex items-center gap-2">
           <span className="w-3.5 h-3.5 bg-brutal-purple inline-block border-2 border-brutal-black"></span>
           <h2 className="text-base font-black text-brutal-black uppercase tracking-wide">
-            Universal Multi-Domain Verification Suite
+            SherDetect Multi-Domain Verification Suite
           </h2>
           {activeDomainFilter !== "all" ? (
             <span className="text-[11px] font-black bg-brutal-yellow text-brutal-black px-2 py-0.5 border-2 border-brutal-black rounded shadow-brutal-sm flex items-center gap-1 animate-toast">
-              Filtering by: {DOMAIN_LABELS[activeDomainFilter as DomainKey] || activeDomainFilter}
+              Filtered: {DOMAIN_LABELS[activeDomainFilter as DomainKey] || activeDomainFilter}
               <button
                 onClick={() => onSelectDomain && onSelectDomain("all")}
                 className="ml-1 hover:text-red-600 text-xs font-black"
@@ -83,8 +83,8 @@ export const DomainBanner: React.FC<DomainBannerProps> = ({
         </div>
 
         <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-brutal-black bg-brutal-green border-2 border-brutal-black px-3 py-0.5 rounded-lg shadow-brutal-sm">
-          <i className="fa-solid fa-file-circle-check text-xs"></i>
-          Accepts PDF, DOCX, PNG, JPG, CSV, ZIP, TXT &amp; More
+          <i className="fa-solid fa-shield-check text-xs"></i>
+          Supports PDF, DOCX, PNG, JPG, CSV, ZIP &amp; TXT
         </span>
       </div>
 

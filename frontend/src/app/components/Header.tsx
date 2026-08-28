@@ -19,22 +19,22 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Brand Logo & Title */}
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-brutal-yellow border-2.5 border-brutal-black shadow-brutal-sm rounded-xl flex items-center justify-center text-lg font-extrabold transition-transform hover:rotate-6">
-            <i className="fa-solid fa-shield-halved text-brutal-black"></i>
+            <i className="fa-solid fa-magnifying-glass-chart text-brutal-black"></i>
           </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="font-black text-xl tracking-tight text-brutal-black uppercase">
-                VERIFY
+                SHER
                 <span className="bg-brutal-yellow px-1.5 py-0.5 border-2 border-brutal-black rounded ml-1 shadow-brutal-sm">
-                  HUB
+                  DETECT
                 </span>
               </span>
               <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-brutal-cyan border-2 border-brutal-black shadow-brutal-sm">
-                Universal Platform
+                AI Forensics Suite
               </span>
             </div>
             <p className="text-[11px] font-extrabold text-slate-700">
-              Multi-Domain Verification Engine &bull; Resumes, Bills, IDs, Credentials &amp; Legal
+              Autonomous Multi-Domain Document Forensic &amp; Verification Engine &bull; Resumes, Bills, IDs, Credentials &amp; Legal
             </p>
           </div>
         </div>
