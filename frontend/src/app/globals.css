@@ -19,36 +19,36 @@ body {
 
 .neo-card {
   background-color: #ffffff;
-  border: 3.5px solid #121212;
-  box-shadow: 6px 6px 0px #121212;
+  border: 3px solid #121212;
+  box-shadow: 5px 5px 0px #121212;
   border-radius: 14px;
-  transition: all 0.15s ease-in-out;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .neo-card:hover {
-  box-shadow: 8px 8px 0px #121212;
+  box-shadow: 7px 7px 0px #121212;
 }
 
 .neo-btn {
-  border: 3px solid #121212;
-  box-shadow: 4px 4px 0px #121212;
+  border: 2.5px solid #121212;
+  box-shadow: 3.5px 3.5px 0px #121212;
   font-weight: 800;
   border-radius: 8px;
-  transition: all 0.1s ease;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .neo-btn:hover {
   transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0px #121212;
+  box-shadow: 5.5px 5.5px 0px #121212;
 }
 
 .neo-btn:active {
   transform: translate(2px, 2px);
-  box-shadow: 2px 2px 0px #121212;
+  box-shadow: 1.5px 1.5px 0px #121212;
 }
 
 .neo-input {
-  border: 3px solid #121212;
+  border: 2.5px solid #121212;
   box-shadow: 3px 3px 0px #121212;
   border-radius: 8px;
   background-color: #ffffff;
@@ -64,7 +64,7 @@ body {
 .drag-active {
   background-color: #ffde59 !important;
   border-color: #121212 !important;
-  transform: scale(1.02);
+  transform: scale(1.01);
 }
 
 .neo-badge {
@@ -73,6 +73,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   box-shadow: 2px 2px 0px #121212;
+  transition: transform 0.2s ease;
 }
 
 .badge-pending { background-color: #ffde59; color: #121212; }
@@ -81,6 +82,7 @@ body {
 .badge-rejected { background-color: #ff66c4; color: #121212; }
 .badge-resubmit { background-color: #ff914d; color: #121212; }
 
+/* Custom Animations */
 @keyframes toastSlideIn {
   from {
     transform: translateY(20px) scale(0.95);
@@ -96,6 +98,35 @@ body {
   animation: toastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #f4f4f0; border-left: 2px solid #121212; }
-::-webkit-scrollbar-thumb { background: #ffde59; border: 2px solid #121212; border-radius: 4px; }
+@keyframes scanline {
+  0% { top: 0%; opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { top: 95%; opacity: 0.8; }
+}
+
+.animate-scanline {
+  animation: scanline 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes rowSlide {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-row-slide {
+  animation: rowSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Screen-fitted scrollbars */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #f4f4f0; border-left: 2px solid #121212; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #ffde59; border: 2px solid #121212; border-radius: 4px; }

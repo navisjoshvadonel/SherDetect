@@ -14,8 +14,8 @@ import {
   DOMAIN_CATEGORIES,
   DOMAIN_LABELS,
 } from "./types";
-import { MOCK_FORGERY_REPORT, MOCK_AUTHENTIC_REPORT } from "../contracts/mock-data";
-import { ForensicReport } from "../contracts/api-spec";
+import { MOCK_FORGERY_REPORT, MOCK_AUTHENTIC_REPORT } from "../../../contracts/mock-data";
+import { ForensicReport } from "../../../contracts/api-spec";
 
 export default function ForensicDashboard() {
   const [currentRole, setCurrentRole] = useState<"customer" | "officer">("customer");
@@ -143,7 +143,7 @@ export default function ForensicDashboard() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/verify-document", {
+      const res = await fetch("http://localhost:8000/api/verify-document", {
         method: "POST",
         body: formData,
       });
@@ -249,40 +249,43 @@ export default function ForensicDashboard() {
 
   return (
     <div className="min-h-screen bg-brutal-bg text-brutal-black antialiased selection:bg-brutal-yellow selection:text-brutal-black flex flex-col">
-      {/* Top Navigation Bar */}
+      {/* Navigation Header */}
       <Header
         currentRole={currentRole}
         onRoleChange={setCurrentRole}
         pendingCount={pendingCount}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 space-y-8">
-        {/* Supported Domains Banner */}
+      {/* Main Screen-Fitted Container */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+        {/* Universal Multi-Domain Banner */}
         <DomainBanner
           activeDomainFilter={domainFilter}
           onSelectDomain={(domain) => setDomainFilter(domain)}
         />
 
-        {/* Dynamic Role Views */}
-        {currentRole === "customer" ? (
-          <SubmitterView
-            documents={documents}
-            onSubmitDocument={handleSubmitDocument}
-            onInspectDocument={handleInspectDocument}
-          />
-        ) : (
-          <ReviewerView
-            documents={documents}
-            auditLogs={auditLogs}
-            selectedDomainFilter={domainFilter}
-            onDomainFilterChange={setDomainFilter}
-            onMakeDecision={handleMakeDecision}
-          />
-        )}
+        {/* Dynamic Connected Role Views */}
+        <div className="transition-all duration-300">
+          {currentRole === "customer" ? (
+            <SubmitterView
+              documents={documents}
+              activeDomainFilter={domainFilter}
+              onSubmitDocument={handleSubmitDocument}
+              onInspectDocument={handleInspectDocument}
+            />
+          ) : (
+            <ReviewerView
+              documents={documents}
+              auditLogs={auditLogs}
+              selectedDomainFilter={domainFilter}
+              onDomainFilterChange={setDomainFilter}
+              onMakeDecision={handleMakeDecision}
+            />
+          )}
+        </div>
       </main>
 
-      {/* Toast Overlay */}
+      {/* Toast Notifications */}
       <ToastOverlay toasts={toasts} onDismiss={removeToast} />
     </div>
   );

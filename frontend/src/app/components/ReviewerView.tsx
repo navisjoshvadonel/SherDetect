@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import {
   DomainKey,
   DocumentItem,
-  DocumentStatus,
   DOMAIN_LABELS,
   AuditLogItem,
 } from "../types";
@@ -62,17 +61,17 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Officer Dashboard Header & Filters */}
-      <div className="neo-card p-6 bg-white space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="neo-card p-4 bg-white space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-black text-brutal-black flex items-center gap-2 uppercase">
+            <h2 className="text-base font-black text-brutal-black flex items-center gap-2 uppercase">
               <i className="fa-solid fa-user-check text-brutal-purple"></i>
               Verifier Inspection Worklist
             </h2>
             <p className="text-xs font-bold text-slate-600 mt-0.5">
-              Review submitted resumes, bills, IDs, credentials and execute verification decisions
+              Review submitted documents, run ELA analysis, and execute verification decisions
             </p>
           </div>
 
@@ -80,7 +79,7 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
             <select
               value={selectedDomainFilter}
               onChange={(e) => onDomainFilterChange(e.target.value)}
-              className="neo-input px-3 py-1.5 text-xs font-black text-brutal-black"
+              className="neo-input px-2.5 py-1 text-xs font-black text-brutal-black"
             >
               <option value="all">All Domains</option>
               {(Object.keys(DOMAIN_LABELS) as DomainKey[]).map((key) => (
@@ -93,7 +92,7 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
             <select
               value={selectedStatusFilter}
               onChange={(e) => setSelectedStatusFilter(e.target.value)}
-              className="neo-input px-3 py-1.5 text-xs font-black text-brutal-black"
+              className="neo-input px-2.5 py-1 text-xs font-black text-brutal-black"
             >
               <option value="all">All Statuses</option>
               <option value="pending">Pending</option>
@@ -107,29 +106,29 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
       </div>
 
       {/* Main Reviewer Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Queue List Table */}
         <div className="lg:col-span-5 neo-card overflow-hidden flex flex-col justify-between">
           <div>
-            <div className="p-4 border-b-3 border-brutal-black flex items-center justify-between bg-brutal-cyan">
-              <span className="font-black text-brutal-black text-sm uppercase flex items-center">
-                <i className="fa-solid fa-list-check me-2"></i>
+            <div className="p-3 border-b-2.5 border-brutal-black flex items-center justify-between bg-brutal-cyan">
+              <span className="font-black text-brutal-black text-xs uppercase flex items-center">
+                <i className="fa-solid fa-list-check me-1.5"></i>
                 Multi-Domain Queue ({filteredDocs.length})
               </span>
-              <span className="text-xs font-extrabold bg-white px-2 py-0.5 border border-brutal-black rounded">
-                All File Formats
+              <span className="text-[10px] font-black bg-white px-2 py-0.5 border border-brutal-black rounded">
+                Live Audits
               </span>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="max-h-[360px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-left text-xs font-bold">
-                <thead className="bg-brutal-bg border-b-3 border-brutal-black text-brutal-black uppercase font-black">
+                <thead className="bg-brutal-bg border-b-2.5 border-brutal-black text-brutal-black uppercase font-black sticky top-0 z-10">
                   <tr>
-                    <th className="p-3 border-r-2 border-brutal-black">ID</th>
-                    <th className="p-3 border-r-2 border-brutal-black">Domain &amp; Submitter</th>
-                    <th className="p-3 border-r-2 border-brutal-black">Doc Type</th>
-                    <th className="p-3 border-r-2 border-brutal-black">Status</th>
-                    <th className="p-3 text-right">Action</th>
+                    <th className="p-2.5 border-r-2 border-brutal-black">ID</th>
+                    <th className="p-2.5 border-r-2 border-brutal-black">Domain &amp; Submitter</th>
+                    <th className="p-2.5 border-r-2 border-brutal-black">Doc Type</th>
+                    <th className="p-2.5 border-r-2 border-brutal-black">Status</th>
+                    <th className="p-2.5 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y-2 divide-brutal-black text-brutal-black bg-white">
@@ -146,35 +145,35 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
                         <tr
                           key={doc.id}
                           onClick={() => setSelectedDocId(doc.id)}
-                          className={`hover:bg-brutal-yellow/20 transition cursor-pointer ${
-                            isSelected ? "bg-brutal-yellow/30 font-black" : ""
+                          className={`hover:bg-brutal-yellow/20 transition-all duration-150 cursor-pointer animate-row-slide ${
+                            isSelected ? "bg-brutal-yellow/30 font-black border-l-4 border-l-brutal-black" : ""
                           }`}
                         >
-                          <td className="p-3 border-r-2 border-brutal-black font-mono font-black">
-                            #DOC-{doc.id}
+                          <td className="p-2.5 border-r-2 border-brutal-black font-mono font-black text-[11px]">
+                            #{doc.id}
                           </td>
-                          <td className="p-3 border-r-2 border-brutal-black">
+                          <td className="p-2.5 border-r-2 border-brutal-black">
                             <div className="font-extrabold text-brutal-black">
                               {doc.customerName}
                             </div>
-                            <div className="text-[10px] font-bold text-slate-500 uppercase">
+                            <div className="text-[9px] font-black text-slate-500 uppercase">
                               {doc.domainDisplay}
                             </div>
                           </td>
-                          <td className="p-3 border-r-2 border-brutal-black">
+                          <td className="p-2.5 border-r-2 border-brutal-black text-[11px]">
                             {doc.docTypeDisplay}
                           </td>
-                          <td className="p-3 border-r-2 border-brutal-black">
+                          <td className="p-2.5 border-r-2 border-brutal-black">
                             <span
-                              className={`neo-badge badge-${doc.status} text-[10px] px-2 py-0.5 rounded-md inline-block`}
+                              className={`neo-badge badge-${doc.status} text-[9px] px-2 py-0.5 rounded inline-block`}
                             >
                               {doc.status.replace("_", " ")}
                             </span>
                           </td>
-                          <td className="p-3 text-right">
+                          <td className="p-2.5 text-right">
                             <button
                               type="button"
-                              className="neo-btn px-3 py-1 text-[11px] bg-brutal-yellow text-brutal-black uppercase"
+                              className="neo-btn px-2 py-0.5 text-[10px] bg-brutal-yellow text-brutal-black uppercase hover:scale-105"
                             >
                               Inspect
                             </button>
@@ -190,42 +189,42 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
         </div>
 
         {/* Active Inspection Panel & Decision Controls */}
-        <div className="lg:col-span-7 space-y-6">
+        <div className="lg:col-span-7 space-y-4">
           {activeDoc ? (
             <>
               {/* Document Inspector Card */}
-              <div className="neo-card p-6 space-y-5 bg-white">
-                <div className="flex items-center justify-between border-b-3 border-brutal-black pb-3">
+              <div className="neo-card p-4 space-y-4 bg-white">
+                <div className="flex items-center justify-between border-b-2 border-brutal-black pb-2.5">
                   <div>
-                    <span className="text-xs font-mono font-black text-brutal-purple bg-brutal-purple/20 px-2 py-0.5 border border-brutal-black rounded">
+                    <span className="text-[10px] font-mono font-black text-brutal-purple bg-brutal-purple/20 px-2 py-0.5 border border-brutal-black rounded">
                       #DOC-{activeDoc.id}
                     </span>
-                    <h3 className="font-black text-brutal-black text-lg mt-1">
+                    <h3 className="font-black text-brutal-black text-base mt-0.5">
                       {activeDoc.customerName}
                     </h3>
-                    <p className="text-[11px] font-bold text-slate-600">
+                    <p className="text-[10px] font-bold text-slate-600">
                       {activeDoc.docTypeDisplay} &bull; {activeDoc.domainDisplay}
                     </p>
                   </div>
-                  <span className={`neo-badge badge-${activeDoc.status} text-xs px-3 py-1 rounded-md`}>
+                  <span className={`neo-badge badge-${activeDoc.status} text-xs px-2.5 py-1 rounded`}>
                     {activeDoc.status.replace("_", " ")}
                   </span>
                 </div>
 
                 {/* Preview Box */}
-                <div className="rounded-xl border-3 border-brutal-black bg-brutal-bg p-4 text-center space-y-3 shadow-brutal-sm">
-                  <div className="text-xs font-black text-brutal-black flex items-center justify-between border-b-2 border-brutal-black pb-2">
+                <div className="rounded-xl border-2 border-brutal-black bg-brutal-bg p-3 text-center space-y-2 shadow-brutal-sm">
+                  <div className="text-[11px] font-black text-brutal-black flex items-center justify-between border-b border-brutal-black pb-1.5">
                     <span>{activeDoc.docTypeDisplay}</span>
-                    <span className="font-mono bg-white px-2 py-0.5 border border-brutal-black rounded">
+                    <span className="font-mono bg-white px-2 py-0.5 border border-brutal-black rounded text-[10px]">
                       {activeDoc.fileName}
                     </span>
                   </div>
 
-                  <div className="aspect-video rounded-lg bg-white border-2 border-brutal-black flex flex-col items-center justify-center relative overflow-hidden p-6">
+                  <div className="h-28 rounded-lg bg-white border border-brutal-black flex flex-col items-center justify-center relative overflow-hidden p-3">
                     <i
-                      className={`${getFormatIconClass(activeDoc.fileExt)} text-5xl mb-2`}
+                      className={`${getFormatIconClass(activeDoc.fileExt)} text-3xl mb-1`}
                     ></i>
-                    <span className="text-xs font-black bg-brutal-yellow px-3 py-1 rounded border-2 border-brutal-black uppercase">
+                    <span className="text-[10px] font-black bg-brutal-yellow px-2 py-0.5 rounded border border-brutal-black uppercase">
                       {activeDoc.fileExt.toUpperCase()} Document File
                     </span>
                   </div>
@@ -239,41 +238,41 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
                 />
 
                 {/* Decision Form */}
-                <div className="space-y-3 pt-2">
-                  <label className="block text-xs font-black text-brutal-black uppercase">
+                <div className="space-y-2 pt-1">
+                  <label className="block text-[11px] font-black text-brutal-black uppercase">
                     Verifier Notes &amp; Audit Comments *
                   </label>
                   <textarea
                     value={officerNotes}
                     onChange={(e) => setOfficerNotes(e.target.value)}
-                    rows={3}
-                    className="w-full neo-input p-3 text-xs font-bold text-brutal-black"
+                    rows={2}
+                    className="w-full neo-input p-2.5 text-xs font-bold text-brutal-black"
                     placeholder="Enter verification comments, credential check notes, or reason for rejection/resubmission..."
                   />
 
-                  <div className="grid grid-cols-3 gap-3 pt-2">
+                  <div className="grid grid-cols-3 gap-2.5 pt-1">
                     <button
                       type="button"
                       onClick={() => handleDecisionSubmit("verified")}
-                      className="neo-btn py-3 bg-brutal-green text-brutal-black text-xs font-black uppercase flex flex-col items-center justify-center gap-1 cursor-pointer"
+                      className="neo-btn py-2.5 bg-brutal-green text-brutal-black text-xs font-black uppercase flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:scale-[1.02] active:scale-95"
                     >
-                      <i className="fa-solid fa-circle-check text-base"></i>
+                      <i className="fa-solid fa-circle-check text-sm"></i>
                       Approve
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDecisionSubmit("resubmit")}
-                      className="neo-btn py-3 bg-brutal-orange text-brutal-black text-xs font-black uppercase flex flex-col items-center justify-center gap-1 cursor-pointer"
+                      className="neo-btn py-2.5 bg-brutal-orange text-brutal-black text-xs font-black uppercase flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:scale-[1.02] active:scale-95"
                     >
-                      <i className="fa-solid fa-arrows-rotate text-base"></i>
+                      <i className="fa-solid fa-arrows-rotate text-sm"></i>
                       Resubmit
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDecisionSubmit("rejected")}
-                      className="neo-btn py-3 bg-brutal-pink text-brutal-black text-xs font-black uppercase flex flex-col items-center justify-center gap-1 cursor-pointer"
+                      className="neo-btn py-2.5 bg-brutal-pink text-brutal-black text-xs font-black uppercase flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:scale-[1.02] active:scale-95 text-white"
                     >
-                      <i className="fa-solid fa-circle-xmark text-base"></i>
+                      <i className="fa-solid fa-circle-xmark text-sm"></i>
                       Reject
                     </button>
                   </div>
@@ -281,7 +280,7 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
               </div>
             </>
           ) : (
-            <div className="neo-card p-12 text-center text-slate-600 bg-white font-bold">
+            <div className="neo-card p-8 text-center text-slate-600 bg-white font-bold">
               Select a document from the queue to inspect verifier details.
             </div>
           )}
