@@ -16,7 +16,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-white border-b-3 border-brutal-black px-4 lg:px-8 py-2 shadow-brutal">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2.5">
-        {/* Brand Logo & Title */}
+        {/* Brand Logo & System Info */}
         <div className="flex items-center space-x-3">
           <div className="w-9 h-9 bg-brutal-yellow border-2.5 border-brutal-black shadow-brutal-sm rounded-xl flex items-center justify-center text-lg font-extrabold transition-all duration-300 hover:rotate-12 hover:scale-110">
             <i className="fa-solid fa-magnifying-glass-chart text-brutal-black animate-icon-pop"></i>
@@ -33,6 +33,10 @@ export const Header: React.FC<HeaderProps> = ({
                 <i className="fa-solid fa-shield-halved text-brutal-black"></i>
                 AI Forensics Suite
               </span>
+              <span className="text-[9px] font-mono font-black bg-brutal-green text-brutal-black px-1.5 py-0.2 rounded border border-brutal-black hidden sm:inline-flex items-center gap-1 shadow-brutal-sm">
+                <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full animate-ping"></span>
+                AI Engine: Online (Port 8000)
+              </span>
             </div>
             <p className="text-[10.5px] font-extrabold text-slate-700">
               Autonomous Multi-Domain Document Forensic &amp; Verification Engine &bull; Resumes, Bills, IDs, Credentials &amp; Legal
@@ -40,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Global Role Switcher */}
+        {/* Role Switcher Controls */}
         <div className="flex items-center bg-brutal-bg p-1 rounded-xl border-2.5 border-brutal-black shadow-brutal-sm gap-1.5">
           <span className="text-[10.5px] font-black text-brutal-black px-1.5 hidden sm:flex items-center gap-1">
             <i className="fa-solid fa-sliders text-brutal-purple me-1"></i>

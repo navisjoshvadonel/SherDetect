@@ -27,6 +27,7 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
   );
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Sync selected domain if activeDomainFilter changes from banner
   useEffect(() => {
@@ -89,10 +90,16 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
     return "fa-solid fa-file text-slate-600";
   };
 
-  // Filter documents by active domain filter
-  const filteredDocs = documents.filter((d) =>
-    activeDomainFilter === "all" ? true : d.domain === activeDomainFilter
-  );
+  // Filter documents by active domain filter AND search query
+  const filteredDocs = documents.filter((d) => {
+    const matchDomain = activeDomainFilter === "all" ? true : d.domain === activeDomainFilter;
+    const matchQuery =
+      searchQuery.trim() === "" ||
+      d.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.docTypeDisplay.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.id.includes(searchQuery);
+    return matchDomain && matchQuery;
+  });
 
   // Stats calculation
   const totalCount = documents.length;
@@ -107,13 +114,13 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Drag & Drop Upload Card */}
-        <div className="lg:col-span-1 neo-card p-4 flex flex-col justify-between">
+        {/* Upload Card */}
+        <div className="lg:col-span-1 neo-card p-4 flex flex-col justify-between bg-white">
           <div>
             <div className="flex items-center justify-between mb-2.5 border-b-2.5 border-brutal-black pb-2">
               <h3 className="font-black text-brutal-black text-xs flex items-center gap-2 uppercase">
                 <i className="fa-solid fa-cloud-arrow-up text-brutal-pink animate-bounce"></i>
-                Upload Any Document
+                Document Submission Portal
               </h3>
               <span className="text-[9.5px] font-black bg-brutal-cyan text-brutal-black px-2 py-0.5 rounded border-2 border-brutal-black shadow-brutal-sm">
                 MAX 50MB
@@ -124,7 +131,7 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
               {/* Domain Select */}
               <div>
                 <label className="block text-[10.5px] font-black text-brutal-black mb-1 uppercase">
-                  1. Select Target Domain *
+                  1. Target Verification Domain *
                 </label>
                 <select
                   value={selectedDomain}
@@ -143,7 +150,7 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
               {/* Doc Type Select */}
               <div>
                 <label className="block text-[10.5px] font-black text-brutal-black mb-1 uppercase">
-                  2. Document Type *
+                  2. Document Classification *
                 </label>
                 <select
                   value={selectedDocType}
@@ -162,7 +169,7 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
               {/* Drag & Drop Zone */}
               <div>
                 <label className="block text-[10.5px] font-black text-brutal-black mb-1 uppercase">
-                  3. Drag &amp; Drop File (Any Format) *
+                  3. Select File Payload *
                 </label>
                 <div
                   onDragOver={handleDragOver}
@@ -197,7 +204,7 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
                     <div className="mt-2 p-1.5 rounded-lg bg-brutal-green border-2 border-brutal-black text-[11px] font-black text-brutal-black w-full flex items-center justify-center gap-1.5 shadow-brutal-sm animate-toast">
                       <i className={getFormatIconClass(selectedFile.name.split(".").pop() || "")}></i>
                       <span className="truncate max-w-[130px]">{selectedFile.name}</span>
-                      <span className="text-[9.5px] bg-white px-1 border border-brutal-black rounded">
+                      <span className="text-[9.5px] bg-white px-1 border border-brutal-black rounded font-mono">
                         {(selectedFile.size / 1024).toFixed(1)} KB
                       </span>
                     </div>
@@ -216,13 +223,13 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
                 }`}
               >
                 <i className="fa-solid fa-paper-plane me-1"></i>
-                Submit Document For Verification Review
+                Submit For AI Forensic Audit
               </button>
             </form>
           </div>
         </div>
 
-        {/* Submitter Documents List & Status Tracker */}
+        {/* Documents Table & Metrics Dashboard */}
         <div className="lg:col-span-2 space-y-3">
           {/* Stats Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -236,7 +243,7 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
             </div>
             <div className="neo-card p-2.5 bg-brutal-yellow transition-transform hover:-translate-y-1">
               <span className="text-[10px] font-black uppercase text-brutal-black block">
-                Pending Review
+                Pending Audits
               </span>
               <span className="text-xl font-black text-brutal-black mt-0.5 block font-mono">
                 {pendingCount}
@@ -244,7 +251,7 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
             </div>
             <div className="neo-card p-2.5 bg-brutal-green transition-transform hover:-translate-y-1">
               <span className="text-[10px] font-black uppercase text-brutal-black block">
-                Verified Docs
+                Verified Clear
               </span>
               <span className="text-xl font-black text-brutal-black mt-0.5 block font-mono">
                 {verifiedCount}
@@ -252,7 +259,7 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
             </div>
             <div className="neo-card p-2.5 bg-brutal-pink transition-transform hover:-translate-y-1">
               <span className="text-[10px] font-black uppercase text-brutal-black block">
-                Action Needed
+                Flagged / Action
               </span>
               <span className="text-xl font-black text-brutal-black mt-0.5 block font-mono">
                 {actionNeededCount}
@@ -260,16 +267,25 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
             </div>
           </div>
 
-          {/* Documents Table */}
-          <div className="neo-card overflow-hidden">
-            <div className="p-2.5 border-b-2.5 border-brutal-black flex items-center justify-between bg-white">
+          {/* Table Container */}
+          <div className="neo-card overflow-hidden bg-white">
+            <div className="p-2.5 border-b-2.5 border-brutal-black flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white">
               <h3 className="font-black text-brutal-black text-xs flex items-center gap-2 uppercase">
                 <i className="fa-solid fa-folder-tree text-brutal-cyan"></i>
-                My Submitted Documents &amp; Status ({filteredDocs.length})
+                Submitted Documents &amp; Audit Queue ({filteredDocs.length})
               </h3>
-              <span className="text-[9.5px] font-black bg-brutal-bg px-2 py-0.5 border border-brutal-black rounded shadow-brutal-sm">
-                User ID #USR-88219
-              </span>
+
+              {/* Instant Search Bar */}
+              <div className="relative">
+                <i className="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search file name or ID..."
+                  className="neo-input pl-8 pr-2 py-1 text-xs font-bold text-brutal-black w-48 sm:w-56"
+                />
+              </div>
             </div>
 
             <div className="max-h-[290px] overflow-y-auto custom-scrollbar">
@@ -277,8 +293,8 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
                 <thead className="bg-brutal-yellow border-b-2.5 border-brutal-black text-brutal-black uppercase font-black sticky top-0 z-10">
                   <tr>
                     <th className="p-2 border-r-2 border-brutal-black">Domain</th>
-                    <th className="p-2 border-r-2 border-brutal-black">Document Type</th>
-                    <th className="p-2 border-r-2 border-brutal-black">File Name</th>
+                    <th className="p-2 border-r-2 border-brutal-black">Classification</th>
+                    <th className="p-2 border-r-2 border-brutal-black">File Payload</th>
                     <th className="p-2 border-r-2 border-brutal-black">Status</th>
                     <th className="p-2 text-right">Action</th>
                   </tr>
@@ -287,7 +303,7 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
                   {filteredDocs.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-5 text-center text-slate-500 font-bold">
-                        No documents match the current domain filter.
+                        No documents found matching search criteria.
                       </td>
                     </tr>
                   ) : (

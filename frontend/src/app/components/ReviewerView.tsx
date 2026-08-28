@@ -30,6 +30,7 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
   onMakeDecision,
 }) => {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedDocId, setSelectedDocId] = useState<string | null>(
     documents.length > 0 ? documents[0].id : null
   );
@@ -40,7 +41,12 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
       selectedDomainFilter === "all" ? true : doc.domain === selectedDomainFilter;
     const matchStatus =
       selectedStatusFilter === "all" ? true : doc.status === selectedStatusFilter;
-    return matchDomain && matchStatus;
+    const matchQuery =
+      searchQuery.trim() === "" ||
+      doc.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.id.includes(searchQuery);
+    return matchDomain && matchStatus && matchQuery;
   });
 
   const activeDoc = documents.find((d) => d.id === selectedDocId) || filteredDocs[0];
@@ -49,6 +55,17 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
     if (!activeDoc) return;
     onMakeDecision(activeDoc.id, decision, officerNotes);
     setOfficerNotes("");
+  };
+
+  const handleExportAuditJSON = () => {
+    if (!activeDoc || !activeDoc.report) return;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(activeDoc.report, null, 2));
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `SherDetect_Audit_${activeDoc.id}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   const getFormatIconClass = (ext: string) => {
@@ -62,24 +79,37 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Officer Dashboard Header & Filters */}
+      {/* Officer Worklist Header & Filter Bar */}
       <div className="neo-card p-3 bg-white space-y-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-black text-brutal-black flex items-center gap-2 uppercase">
               <i className="fa-solid fa-user-check text-brutal-purple animate-icon-pop"></i>
-              Verifier Inspection Worklist
+              Verifier Inspection &amp; Audit Worklist
             </h2>
             <p className="text-[11px] font-bold text-slate-600 mt-0.5">
-              Review submitted documents, run ELA analysis, and execute verification decisions
+              Review incoming documents, analyze pixel ELA heatmaps, and execute verification decisions
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Search Input */}
+            <div className="relative">
+              <i className="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search queue..."
+                className="neo-input pl-8 pr-2 py-1 text-xs font-bold text-brutal-black w-40"
+              />
+            </div>
+
+            {/* Domain Filter */}
             <select
               value={selectedDomainFilter}
               onChange={(e) => onDomainFilterChange(e.target.value)}
-              className="neo-input px-2.5 py-1 text-xs font-black text-brutal-black"
+              className="neo-input px-2 py-1 text-xs font-black text-brutal-black"
             >
               <option value="all">All Domains</option>
               {(Object.keys(DOMAIN_LABELS) as DomainKey[]).map((key) => (
@@ -89,10 +119,11 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
               ))}
             </select>
 
+            {/* Status Filter */}
             <select
               value={selectedStatusFilter}
               onChange={(e) => setSelectedStatusFilter(e.target.value)}
-              className="neo-input px-2.5 py-1 text-xs font-black text-brutal-black"
+              className="neo-input px-2 py-1 text-xs font-black text-brutal-black"
             >
               <option value="all">All Statuses</option>
               <option value="pending">Pending</option>
@@ -105,22 +136,22 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
         </div>
       </div>
 
-      {/* Main Reviewer Layout */}
+      {/* Main Reviewer Worklist Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Queue List Table */}
-        <div className="lg:col-span-5 neo-card overflow-hidden flex flex-col justify-between">
+        {/* Document Worklist Table */}
+        <div className="lg:col-span-5 neo-card overflow-hidden flex flex-col justify-between bg-white">
           <div>
             <div className="p-2.5 border-b-2.5 border-brutal-black flex items-center justify-between bg-brutal-cyan">
               <span className="font-black text-brutal-black text-xs uppercase flex items-center">
                 <i className="fa-solid fa-list-check me-1.5"></i>
-                Multi-Domain Queue ({filteredDocs.length})
+                Queue ({filteredDocs.length})
               </span>
               <span className="text-[9.5px] font-black bg-white px-2 py-0.5 border border-brutal-black rounded">
                 Live Audits
               </span>
             </div>
 
-            <div className="max-h-[340px] overflow-y-auto custom-scrollbar">
+            <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-left text-xs font-bold">
                 <thead className="bg-brutal-bg border-b-2.5 border-brutal-black text-brutal-black uppercase font-black sticky top-0 z-10">
                   <tr>
@@ -135,7 +166,7 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
                   {filteredDocs.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-5 text-center text-slate-500 font-bold">
-                        No documents match the active filter criteria.
+                        No queue items match filter.
                       </td>
                     </tr>
                   ) : (
@@ -188,11 +219,11 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
           </div>
         </div>
 
-        {/* Active Inspection Panel & Decision Controls */}
+        {/* Active Inspection & Forensic Canvas Panel */}
         <div className="lg:col-span-7 space-y-4">
           {activeDoc ? (
             <>
-              {/* Document Inspector Card */}
+              {/* Active Document Header */}
               <div className="neo-card p-3.5 space-y-3 bg-white">
                 <div className="flex items-center justify-between border-b-2 border-brutal-black pb-2">
                   <div>
@@ -206,12 +237,24 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
                       {activeDoc.docTypeDisplay} &bull; {activeDoc.domainDisplay}
                     </p>
                   </div>
-                  <span className={`neo-badge badge-${activeDoc.status} text-xs px-2.5 py-1 rounded`}>
-                    {activeDoc.status.replace("_", " ")}
-                  </span>
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleExportAuditJSON}
+                      className="neo-btn px-2 py-1 bg-brutal-bg text-brutal-black text-[10px] uppercase font-black flex items-center gap-1 hover:bg-brutal-yellow"
+                      title="Export Official Forensic Audit JSON Report"
+                    >
+                      <i className="fa-solid fa-download text-xs"></i>
+                      Export Report
+                    </button>
+                    <span className={`neo-badge badge-${activeDoc.status} text-xs px-2.5 py-1 rounded`}>
+                      {activeDoc.status.replace("_", " ")}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Preview Box */}
+                {/* Preview Metadata Box */}
                 <div className="rounded-xl border-2 border-brutal-black bg-brutal-bg p-2.5 text-center space-y-1.5 shadow-brutal-sm">
                   <div className="text-[10.5px] font-black text-brutal-black flex items-center justify-between border-b border-brutal-black pb-1">
                     <span>{activeDoc.docTypeDisplay}</span>
@@ -220,7 +263,7 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
                     </span>
                   </div>
 
-                  <div className="h-24 rounded-lg bg-white border border-brutal-black flex flex-col items-center justify-center relative overflow-hidden p-2">
+                  <div className="h-20 rounded-lg bg-white border border-brutal-black flex flex-col items-center justify-center relative overflow-hidden p-2">
                     <i
                       className={`${getFormatIconClass(activeDoc.fileExt)} text-2xl mb-1 transition-transform hover:scale-125 duration-300`}
                     ></i>
@@ -240,7 +283,7 @@ export const ReviewerView: React.FC<ReviewerViewProps> = ({
                 {/* Decision Form */}
                 <div className="space-y-2 pt-1">
                   <label className="block text-[10.5px] font-black text-brutal-black uppercase">
-                    Verifier Notes &amp; Audit Comments *
+                    Verifier Notes &amp; Compliance Trail Comments *
                   </label>
                   <textarea
                     value={officerNotes}
