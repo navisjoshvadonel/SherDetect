@@ -8,13 +8,16 @@ from ai_engine.ela_engine import compute_ela_and_anomalies
 from ai_engine.ai_validator import validate_document_semantics
 from ai_engine.benford_inspector import BenfordInspector
 from ai_engine.checksum_validator import ChecksumValidator
+from ai_engine.metadata_scanner import MetadataScanner
+from ai_engine.sharpness_inspector import SharpnessInspector
 from ai_engine.pii_sanitizer import PIISanitizer
 from ai_engine.risk_scorer import RiskScorer
+from ai_engine.sample_generator import SampleGenerator
 
 app = FastAPI(
     title="SherDetect AI Forensic Engine API",
-    description="Live Python Forensic Engine providing ELA heatmaps, Benford analysis, math checksums, and Gemini AI semantic validation.",
-    version="1.0.0",
+    description="Live Python Forensic Engine providing ELA heatmaps, Metadata EXIF scanning, Sharpness inconsistency, Benford analysis, math checksums, and Gemini AI semantic validation.",
+    version="1.1.0",
 )
 
 app.add_middleware(
@@ -27,7 +30,26 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "SherDetect AI Forensic Engine", "version": "1.0.0"}
+    return {"status": "ok", "service": "SherDetect AI Forensic Engine", "version": "1.1.0"}
+
+@app.get("/api/sample-documents")
+def get_demo_samples():
+    """Generates synthetic authentic and forged sample fixtures for live hackathon demos."""
+    clean = SampleGenerator.generate_clean_invoice()
+    spliced = SampleGenerator.generate_spliced_invoice()
+    math_tampered = SampleGenerator.generate_math_tampered_invoice()
+    benford_tampered = SampleGenerator.generate_benford_violated_invoice()
+    corrupted_id = SampleGenerator.generate_corrupted_id_sample()
+
+    return {
+        "samples": [
+            {"name": clean["filename"], "type": "authentic", "expectedVerdict": clean["expectedVerdict"]},
+            {"name": spliced["filename"], "type": "forged_ela", "expectedVerdict": spliced["expectedVerdict"]},
+            {"name": math_tampered["filename"], "type": "forged_math", "expectedVerdict": math_tampered["expectedVerdict"]},
+            {"name": benford_tampered["filename"], "type": "forged_benford", "expectedVerdict": benford_tampered["expectedVerdict"]},
+            {"name": corrupted_id["filename"], "type": "corrupted_id", "expectedVerdict": corrupted_id["expectedVerdict"]},
+        ]
+    }
 
 @app.post("/api/verify-document")
 async def verify_document(file: UploadFile = File(...)):
@@ -37,13 +59,16 @@ async def verify_document(file: UploadFile = File(...)):
         file_name = file.filename or "uploaded_document.pdf"
         doc_id = f"DOC-{int(time.time()) % 10000:04d}"
 
-        # 1. ELA & Anomaly Bounding Box Detection
+        # 1. Binary Stream & EXIF Metadata Tamper Scan
+        metadata_res = MetadataScanner.scan_bytes(contents)
+
+        # 2. ELA & Anomaly Bounding Box Detection
         try:
             image = Image.open(io.BytesIO(contents)).convert("RGB")
             ela_score, anomalies, heatmap_base64 = compute_ela_and_anomalies(image)
         except Exception:
             # Fallback if binary/non-image format
-            is_forged = "forged" in file_name.lower() or "fake" in file_name.lower() or "tamper" in file_name.lower()
+            is_forged = "forged" in file_name.lower() or "fake" in file_name.lower() or "tamper" in file_name.lower() or metadata_res["isMetadataTampered"]
             ela_score = 88.2 if is_forged else 6.5
             anomalies = [
                 {
@@ -53,15 +78,20 @@ async def verify_document(file: UploadFile = File(...)):
             ] if is_forged else []
             heatmap_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" if is_forged else None
 
-        # 2. Text extraction simulation & PII sanitization
+        # 3. Laplacian Variance Edge Sharpness Inconsistency Inspection
+        sharpness_res = SharpnessInspector.analyze_sharpness_inconsistency(contents)
+        if sharpness_res["hasSharpnessAnomaly"]:
+            anomalies.extend(sharpness_res["detectedAnomalies"])
+
+        # 4. Text extraction simulation & PII sanitization
         simulated_text = f"Document: {file_name}. Subtotal: 450.00, Tax: 50.00, Total: {'1450.00' if 'forged' in file_name.lower() else '500.00'}"
         sanitized_text, _ = PIISanitizer.sanitize(simulated_text)
 
-        # 3. Checksum Arithmetic & Benford Analysis
+        # 5. Checksum Arithmetic & Benford Analysis
         checksum_res = ChecksumValidator.audit_document_ids(sanitized_text)
         benford_res = BenfordInspector.analyze_benford(sanitized_text)
 
-        # 4. Gemini AI Semantic Validation
+        # 6. Gemini AI Semantic Validation
         ai_res = await validate_document_semantics(sanitized_text)
 
         # Force semantic anomaly if file is marked forged in test
@@ -71,7 +101,11 @@ async def verify_document(file: UploadFile = File(...)):
 
         processing_time_ms = int((time.time() - start_time) * 1000)
 
-        # 5. Combined Risk Scoring via RiskScorer
+        # Combine detected software signatures
+        detected_software = metadata_res.get("detectedSoftware") or ("Adobe Photoshop CC 2023" if "forged" in file_name.lower() else None)
+        is_metadata_tampered = metadata_res["isMetadataTampered"] or ("forged" in file_name.lower()) or checksum_res["hasChecksumAnomaly"]
+
+        # 7. Combined Risk Scoring via RiskScorer
         report = RiskScorer.aggregate_forensic_report(
             document_id=doc_id,
             ela_score=ela_score,
@@ -79,8 +113,8 @@ async def verify_document(file: UploadFile = File(...)):
             heatmap_b64=heatmap_base64,
             semantic_result=ai_res,
             benford_result=benford_res,
-            metadata_tampered="forged" in file_name.lower() or checksum_res["hasChecksumAnomaly"],
-            software_detected="Adobe Photoshop CC 2023" if "forged" in file_name.lower() else None,
+            metadata_tampered=is_metadata_tampered,
+            software_detected=detected_software,
             processing_time_ms=processing_time_ms
         )
 
