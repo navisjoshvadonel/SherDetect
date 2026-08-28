@@ -1,4 +1,4 @@
-import { ForensicReport } from "../../../contracts/api-spec";
+import { ForensicReport } from "../contracts/api-spec";
 
 export type DomainKey =
   | "hr_employment"

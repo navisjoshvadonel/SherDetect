@@ -1,0 +1,8 @@
+{
+  "name": "SherDetect",
+  "description": "Multi-Domain AI Document Forensic & Verification Engine for resumes, IDs, utility bills, degrees, legal contracts, and medical reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

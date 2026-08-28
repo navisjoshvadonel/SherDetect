@@ -14,8 +14,8 @@ import {
   DOMAIN_CATEGORIES,
   DOMAIN_LABELS,
 } from "./types";
-import { MOCK_FORGERY_REPORT, MOCK_AUTHENTIC_REPORT } from "../../../contracts/mock-data";
-import { ForensicReport } from "../../../contracts/api-spec";
+import { MOCK_FORGERY_REPORT, MOCK_AUTHENTIC_REPORT } from "../contracts/mock-data";
+import { ForensicReport } from "../contracts/api-spec";
 
 export default function ForensicDashboard() {
   const [currentRole, setCurrentRole] = useState<"customer" | "officer">("customer");
@@ -143,7 +143,7 @@ export default function ForensicDashboard() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("http://localhost:8000/api/verify-document", {
+      const res = await fetch("/api/verify-document", {
         method: "POST",
         body: formData,
       });
