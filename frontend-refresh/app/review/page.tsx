@@ -1,0 +1,3 @@
+import Link from "next/link";
+import { documents } from "../data";
+export default function ReviewPage(){return <><div className="page-heading"><div><div className="eyebrow">Review queue</div><h1>Decisions, with evidence.</h1></div><p>Start with the highest combined risk. Open an item to inspect the visual evidence and semantic findings.</p></div><div className="queue">{documents.sort((a,b)=>b.score-a.score).map(doc=><Link href={`/review/${doc.id}`} className="queue-item" key={doc.id}><div><h3>{doc.name}</h3><p>{doc.id} · {doc.domain} · {doc.type} · {doc.date}</p></div><div className="risk-number">{doc.score}<small>risk score</small></div></Link>)}</div></>}
