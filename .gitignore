@@ -7,8 +7,12 @@ __pycache__/
 .pytest_cache/
 .coverage
 
-# Environments
+# Environments - NEVER commit real keys
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 .venv
 env/
 venv/
@@ -26,3 +30,12 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local dev scratch files & agent state
+scratch/
+skills-lock.json
+.agents/
+
+# Python compiled caches in subdirs
+backend/app/__pycache__/
+backend/app/services/__pycache__/
