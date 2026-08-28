@@ -3,7 +3,8 @@ ai_engine/ai_validator.py
 -------------------------
 Layer 2 & 3: Gemini Multimodal Semantic Reasoner & Offline Fallback Engine.
 Audits document text for mathematical parity (Line Items + Tax = Total),
-date chronologies, and ID checksums, with zero-downtime offline fallback.
+date chronologies, ID checksums, typos, signatory plausibility, and template
+markers, with zero-downtime offline fallback.
 Powered by the official modern `google-genai` SDK.
 """
 
@@ -29,10 +30,112 @@ if api_key:
         print(f"[SherDetect AI] Gemini client setup notice: {err}")
 
 
+# ---------------------------------------------------------------------------
+# Common certificate / document keywords and their known misspellings.
+# Each entry maps a *correct* keyword to a regex that catches frequent typos.
+# The regex must NOT match the correct spelling itself.
+# ---------------------------------------------------------------------------
+_TYPO_PATTERNS: List[tuple] = [
+    ("Certificate", re.compile(r"\b(?:Certif[i]?c[ai]te|Cert[i]?ficate|Certifcate|Certiifcate)\b", re.I)),
+    ("Completion", re.compile(r"\b(?:Completi[oi]n|Complet[io]n|Compl[ei]tion)\b", re.I)),
+    ("Authorized", re.compile(r"\b(?:Autho[ri]zed|Athourized|Autorized|Authrized)\b", re.I)),
+    ("Analyze", re.compile(r"\b(?:Anafyze|Analyz|Anaylze|Analize)\b", re.I)),
+    ("Achievement", re.compile(r"\b(?:Acheivement|Acheivment|Achievment|Achivement)\b", re.I)),
+    ("Professional", re.compile(r"\b(?:Proffesional|Profesional|Proffessional|Professsional)\b", re.I)),
+    ("University", re.compile(r"\b(?:Univeristy|Univercity|Univesity|Unversity)\b", re.I)),
+    ("Education", re.compile(r"\b(?:Eduction|Educaton|Educaiton|Edcuation)\b", re.I)),
+    ("Management", re.compile(r"\b(?:Managment|Managemnt|Manegement|Mangement)\b", re.I)),
+    ("Technology", re.compile(r"\b(?:Technolgy|Tecnology|Techonlogy|Techology)\b", re.I)),
+    ("Development", re.compile(r"\b(?:Developement|Devlopment|Develpoment|Develpment)\b", re.I)),
+    ("Engineering", re.compile(r"\b(?:Enginnering|Enginering|Enginneering|Engieering)\b", re.I)),
+    ("Verification", re.compile(r"\b(?:Verfication|Verifcation|Veriifcation|Verificaton)\b", re.I)),
+    ("Congratulations", re.compile(r"\b(?:Congradulations|Congrats|Congradulation|Congratualtion)\b", re.I)),
+    ("Successfully", re.compile(r"\b(?:Succesfully|Successfuly|Sucessfully|Succefully)\b", re.I)),
+    ("Registered", re.compile(r"\b(?:Registred|Resgistered|Registerd|Regsitered)\b", re.I)),
+    ("Coursera", re.compile(r"\b(?:Coursra|Cousera|Courcera|Corsera)\b", re.I)),
+    ("Credential", re.compile(r"\b(?:Credantial|Credentail|Credetnial|Crendential)\b", re.I)),
+]
+
+# Correct spellings for the positive-match check (document must contain real
+# keywords to earn the "has evidence" bonus).
+_VALID_CERT_KEYWORDS = re.compile(
+    r"\b(?:Certificate|Completion|Authorized|Achievement|Credential|Verify|Issued|Signature|Awarded)\b",
+    re.I,
+)
+
+# Template / placeholder markers that indicate a forged or blank template.
+_TEMPLATE_MARKERS = re.compile(
+    r"(?:\bYour\s+Name\s+Here\b|\[INSERT\s+NAME\]|\[NAME\]|\bLorem\s+Ipsum\b|\bSAMPLE\s+ONLY\b"
+    r"|\bXX+/XX+/\d{4}\b|\bXXXX-XXXX\b|\bplaceholder\b|\btemplate\s+only\b)",
+    re.I,
+)
+
+# Suspicious signatory patterns: high-level titles on entry-level certs.
+_SUSPICIOUS_SIGNATORIES = re.compile(
+    r"\b(?:Chief\s+Legal\s+Officer|General\s+Counsel|Chief\s+Financial\s+Officer"
+    r"|Chief\s+Executive\s+Officer|Board\s+of\s+Directors)\b",
+    re.I,
+)
+_ENTRY_LEVEL_INDICATORS = re.compile(
+    r"\b(?:Introduction\s+to|Beginner|Fundamentals|Getting\s+Started|Basics\s+of"
+    r"|Entry[\s-]Level|101)\b",
+    re.I,
+)
+
+
+def _check_typos(text: str) -> List[Dict[str, str]]:
+    """Scan extracted text for known certificate-keyword misspellings."""
+    found: List[Dict[str, str]] = []
+    for correct_word, pattern in _TYPO_PATTERNS:
+        matches = pattern.findall(text)
+        for m in matches:
+            # Only flag if the match is NOT the correct spelling
+            if m.lower() != correct_word.lower():
+                found.append({
+                    "type": "CONTENT_TYPO",
+                    "description": f"Spelling error detected: '{m}' (expected '{correct_word}'). "
+                                   f"Official issuers do not allow spelling errors on certificates."
+                })
+    return found
+
+
+def _check_template_markers(text: str) -> List[Dict[str, str]]:
+    """Detect placeholder / template markers in document text."""
+    found: List[Dict[str, str]] = []
+    matches = _TEMPLATE_MARKERS.findall(text)
+    for m in matches:
+        found.append({
+            "type": "TEMPLATE_MARKER",
+            "description": f"Generic template marker detected: '{m}'. "
+                           f"This indicates the document is a blank template, not an issued certificate."
+        })
+    return found
+
+
+def _check_signatory_plausibility(text: str) -> List[Dict[str, str]]:
+    """Flag implausible signatory titles on entry-level certificates."""
+    found: List[Dict[str, str]] = []
+    if _SUSPICIOUS_SIGNATORIES.search(text) and _ENTRY_LEVEL_INDICATORS.search(text):
+        found.append({
+            "type": "SIGNATORY_IMPLAUSIBILITY",
+            "description": "High-level executive title (e.g. Chief Legal Officer) found signing "
+                           "an entry-level or introductory certificate. This is inconsistent with "
+                           "standard issuing authority hierarchies."
+        })
+    return found
+
+
 def extract_fallback_heuristics(text: str, file_format: str = "unknown") -> Dict[str, Any]:
     """
     Resilient offline heuristic engine.
     Guarantees 100% uptime during live hackathon demos when offline or API key is missing.
+
+    Performs content-first analysis:
+    1. Checksum validation (Aadhaar / card IDs)
+    2. Mathematical parity (Subtotal + Tax = Total)
+    3. Typo detection in certificate keywords
+    4. Template / placeholder marker detection
+    5. Signatory plausibility check
     """
     discrepancies: List[Dict[str, str]] = []
 
@@ -73,21 +176,67 @@ def extract_fallback_heuristics(text: str, file_format: str = "unknown") -> Dict
                 "description": f"Mathematical reconciliation failure: Line items sum to {sum_items:.2f}, but total reads {potential_total:.2f}."
             })
 
+    # 3. Content-based typo detection
+    typo_findings = _check_typos(text)
+    discrepancies.extend(typo_findings)
+
+    # 4. Template / placeholder detection
+    template_findings = _check_template_markers(text)
+    discrepancies.extend(template_findings)
+
+    # 5. Signatory plausibility check
+    signatory_findings = _check_signatory_plausibility(text)
+    discrepancies.extend(signatory_findings)
+
     has_anomaly = len(discrepancies) > 0
     has_document_evidence = text.strip() and not text.startswith("No machine-readable")
+    has_valid_keywords = bool(_VALID_CERT_KEYWORDS.search(text)) if has_document_evidence else False
+
+    # Build detailed text content analysis summary
+    analysis_parts: List[str] = []
+    if typo_findings:
+        analysis_parts.append(f"Found {len(typo_findings)} spelling error(s) in certificate keywords")
+    if template_findings:
+        analysis_parts.append(f"Found {len(template_findings)} template/placeholder marker(s)")
+    if signatory_findings:
+        analysis_parts.append(f"Signatory title is implausible for the certificate level")
+    if id_audit["hasChecksumAnomaly"]:
+        analysis_parts.append(f"Found {len(id_audit['anomalies'])} ID checksum failure(s)")
+    math_discrepancies = [d for d in discrepancies if d["type"] == "MATH_MISMATCH"]
+    if math_discrepancies:
+        analysis_parts.append("Mathematical parity check failed")
+    if not analysis_parts:
+        if has_valid_keywords:
+            analysis_parts.append("All extracted content checks passed (typos, signatories, templates, checksums)")
+        else:
+            analysis_parts.append("Deterministic checks completed; no certificate keywords detected for deep validation")
+
+    text_analysis = "; ".join(analysis_parts) + "."
+
+    # Confidence calibration based on content evidence strength
+    if has_anomaly:
+        confidence = 0.9
+    elif has_valid_keywords:
+        # Document has real certificate keywords and passed all content checks
+        confidence = 0.65
+    elif has_document_evidence:
+        confidence = 0.50
+    else:
+        confidence = 0.0
+
     return {
         "semanticDiscrepancy": has_anomaly,
         "detectedAnomalies": discrepancies,
         "forensicSummary": (
-            f"Forensic audit identified {len(discrepancies)} figure/checksum mismatch(es) in document."
+            f"Forensic audit identified {len(discrepancies)} content anomali(es) in document: {text_analysis}"
             if has_anomaly
-            else "Document content passes baseline semantic and mathematical parity checks."
+            else "Document content passes baseline semantic, spelling, and mathematical parity checks."
         ),
         "source": "offline_heuristics",
         "file_format_observed": file_format,
         "format_bias_mitigation": "File quality and format were ignored; only extracted content and deterministic checks were evaluated.",
-        "text_content_analysis": "Deterministic arithmetic and checksum checks completed; issuer, signatory, branding, and verification-link checks require extracted evidence.",
-        "confidence_score": 0.9 if has_anomaly else (0.45 if has_document_evidence else 0.0),
+        "text_content_analysis": text_analysis,
+        "confidence_score": confidence,
         "final_classification": "Forgery" if has_anomaly else ("Genuine" if has_document_evidence else "Unverifiable")
     }
 

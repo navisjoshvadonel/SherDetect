@@ -7,15 +7,23 @@ Architecture Note (Methodology Transparency):
 ----------------─────────────────────────────
 The weights and non-linear escalation thresholds used in this module are based on an
 Expert-Calibrated Multi-Criteria Decision Analysis (MCDA) heuristic matrix:
-  - Visual ELA Compression (0.35): Primary indicator for physical pixel manipulation.
-  - Semantic Reasoning (0.30)   : Primary indicator for arithmetic/logical figure tampering.
+  - Semantic Reasoning (0.40)   : Primary indicator for content-level fraud (typos, math, signatories).
+  - Visual ELA Compression (0.20): Secondary indicator for physical pixel manipulation.
   - EXIF/Binary Metadata (0.15)  : Secondary indicator for editing software footprints (Photoshop/GIMP).
-  - Benford Frequency (0.10)    : Statistical indicator for numerical distribution anomalies.
+  - Benford Frequency (0.15)    : Statistical indicator for numerical distribution anomalies.
   - Cryptographic Checksums (0.10): Deterministic validation for identity/card checksums.
 
+Content-First Philosophy:
+  - Pixel anomalies (ELA, sharpness) are inherently format-sensitive: JPEGs produce
+    compression noise, while PDFs produce zero pixel data.  These signals are treated
+    as corroborative evidence only and NEVER independently drive a forgery verdict.
+  - Content-level checks (text typos, math parity, checksums, signatory validation)
+    are format-agnostic and take priority.
+
 Escalation Rules (Multi-Trigger Non-Linear Boost):
-  - When 2 or more independent forensic vectors flag anomalies, the risk score is boosted to
-    a minimum of 88.5% (FORGERY_DETECTED), enforcing a defense-in-depth posture.
+  - When 2 or more independent *content-level* forensic vectors flag anomalies, the
+    risk score is boosted, enforcing a defense-in-depth posture.
+  - Pixel anomalies alone cannot trigger escalation.
 
 *Note for production audit*: This model utilizes expert-calibrated heuristics.
 For large-scale enterprise deployments, weights can be further fine-tuned via Logistic Regression
@@ -28,13 +36,13 @@ from typing import Dict, List, Any, Optional
 class RiskScorer:
     """
     Fuses multiple independent forensic vectors into a calibrated risk score (0 - 100).
-    Uses expert-tuned multi-criteria weights with multi-vector escalation triggers.
+    Uses expert-tuned multi-criteria weights with content-first, format-secondary design.
     """
-    # Expert-calibrated heuristic weight distribution
-    WEIGHT_ELA = 0.35
-    WEIGHT_SEMANTIC = 0.30
+    # Expert-calibrated heuristic weight distribution (content-first)
+    WEIGHT_ELA = 0.20
+    WEIGHT_SEMANTIC = 0.40
     WEIGHT_METADATA = 0.15
-    WEIGHT_BENFORD = 0.10
+    WEIGHT_BENFORD = 0.15
     WEIGHT_CHECKSUM = 0.10
 
     @classmethod
@@ -53,12 +61,12 @@ class RiskScorer:
     ) -> Dict[str, Any]:
         """
         Builds a comprehensive ForensicReport payload adhering to contracts/api_spec.py
-        using multi-vector risk fusion and non-linear escalation.
+        using content-first risk fusion. Pixel/format signals are corroborative only.
         """
-        # Vector 1: ELA Score (0-100)
+        # Vector 1: ELA Score (0-100) — format-sensitive, weighted lower
         v_ela = float(min(100.0, max(0.0, ela_score)))
 
-        # Vector 2: Semantic Discrepancy Score (0 or 92.0)
+        # Vector 2: Semantic Discrepancy Score (0 or 92.0) — content-based, primary
         has_semantic_flag = semantic_result.get("semanticDiscrepancy", False)
         v_semantic = 92.0 if has_semantic_flag else 5.0
 
@@ -72,7 +80,7 @@ class RiskScorer:
         has_checksum_flag = any("ID_CHECKSUM_FAILURE" in a.get("type", "") for a in semantic_result.get("detectedAnomalies", []))
         v_checksum = 95.0 if has_checksum_flag else 0.0
 
-        # Weighted calculation (MCDA Expert Calibration)
+        # Weighted calculation (MCDA Expert Calibration — content-first)
         raw_risk = (
             (v_ela * cls.WEIGHT_ELA) +
             (v_semantic * cls.WEIGHT_SEMANTIC) +
@@ -81,9 +89,11 @@ class RiskScorer:
             (v_checksum * cls.WEIGHT_CHECKSUM)
         )
 
-        # Multi-Trigger Non-Linear Escalator (Defense-in-Depth)
+        # Multi-Trigger Non-Linear Escalator (Content-Level Only)
+        # Pixel anomalies are EXCLUDED from the trigger list because they are
+        # format-sensitive: JPEGs always produce some compression contours while
+        # PDFs produce zero. Including them would systematically penalize images.
         anomaly_triggers = [
-            len(pixel_anomalies) > 0,
             has_semantic_flag,
             metadata_tampered,
             benford_result.get("isBenfordAnomaly", False) if benford_result else False,
@@ -108,21 +118,33 @@ class RiskScorer:
         if has_deterministic_semantic_failure:
             raw_risk = max(raw_risk, 65.0)
 
+        # Content-based typo/template/signatory findings are strong forgery signals.
+        content_anomaly_types = {"CONTENT_TYPO", "TEMPLATE_MARKER", "SIGNATORY_IMPLAUSIBILITY"}
+        has_content_forgery_signal = any(
+            anomaly.get("type") in content_anomaly_types
+            for anomaly in semantic_result.get("detectedAnomalies", [])
+        )
+        if has_content_forgery_signal:
+            raw_risk = max(raw_risk, 65.0)
+
         # Gemini/content classification is authoritative over format-only visual noise.
         final_classification = str(semantic_result.get("final_classification", "")).strip().lower()
         try:
             content_confidence = float(semantic_result.get("confidence_score", 0.0))
         except (TypeError, ValueError):
             content_confidence = 0.0
-        content_verified = final_classification == "genuine" and content_confidence >= 0.70
+        # Lowered threshold from 0.70 to 0.50 so the offline fallback's content-clean
+        # verdict (confidence=0.50-0.65) can defend documents against pixel noise.
+        content_verified = final_classification == "genuine" and content_confidence >= 0.50
 
-        if pixel_anomalies and not content_verified:
-            # Pixel artifacts alone are format-sensitive; strong localized evidence raises risk without a fixed score.
-            raw_risk = max(raw_risk, 50.0 + (v_ela * 0.35))
+        # NOTE: Pixel anomalies alone NO LONGER independently boost the score.
+        # They only contribute through the weighted ELA vector above.
+        # This prevents JPGs from being penalized for normal compression noise
+        # while PDFs (which skip ELA entirely) get a free pass.
 
         if final_classification == "forgery":
             raw_risk = max(raw_risk, 65.0)
-        elif content_verified:
+        elif content_verified and not has_deterministic_semantic_failure and not has_content_forgery_signal:
             # A high-confidence content verdict wins over compression, blur, or camera noise.
             raw_risk = min(raw_risk, 24.9)
         elif final_classification == "unverifiable":

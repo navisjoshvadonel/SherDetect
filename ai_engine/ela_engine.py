@@ -16,7 +16,7 @@ import cv2
 def compute_ela_and_anomalies(
     image_bytes: bytes,
     quality: int = 90,
-    min_contour_area: int = 80,
+    min_contour_area: int = 200,
     threshold_val: int = 100
 ) -> Tuple[float, str, List[Dict[str, Any]]]:
     """
@@ -60,8 +60,8 @@ def compute_ela_and_anomalies(
     anomalies: List[Dict[str, Any]] = []
 
     # Step 3: Localize only absolute error spikes; normalized noise made clean JPEGs look forged.
-    if max_val > 12:
-        absolute_threshold = max(12.0, mean_val + (float(np.std(diff_magnitude)) * 4.0))
+    if max_val > 18:
+        absolute_threshold = max(18.0, mean_val + (float(np.std(diff_magnitude)) * 4.0))
         thresh = np.where(diff_magnitude >= absolute_threshold, 255, 0).astype(np.uint8)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
@@ -90,9 +90,9 @@ def compute_ela_and_anomalies(
                 })
 
     # Step 4: Calibrate global ELA score (0 - 100)
-    base_score = mean_val * 6.0
+    base_score = mean_val * 4.0
     if len(anomalies) > 0:
-        base_score += 35.0 + (len(anomalies) * 12.0)
+        base_score += 20.0 + (len(anomalies) * 8.0)
     ela_score = round(min(100.0, max(5.0, base_score)), 1)
 
     # Step 5: Generate Base64 Heatmap JPEG

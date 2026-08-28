@@ -21,7 +21,7 @@ class SharpnessInspector:
         cls,
         image_bytes: bytes,
         grid_size: int = 32,
-        z_threshold: float = 3.2
+        z_threshold: float = 4.0
     ) -> Dict[str, Any]:
         """
         Calculates localized patch-level Laplacian variance across the document.
@@ -78,7 +78,7 @@ class SharpnessInspector:
         anomalies: List[Dict[str, Any]] = []
         for x, y, val in patch_coords:
             z_score = (val - median_var) / std_var
-            if z_score > z_threshold and val > 150.0:
+            if z_score > z_threshold and val > 250.0:
                 x_pct = round((x / w) * 100, 2)
                 y_pct = round((y / h) * 100, 2)
                 w_pct = round((grid_size / w) * 100, 2)
@@ -94,7 +94,7 @@ class SharpnessInspector:
                     "confidence": min(0.95, 0.70 + float(z_score) * 0.05)
                 })
 
-        has_anomaly = len(anomalies) > 0
+        has_anomaly = len(anomalies) >= 3
         risk_score = min(90.0, len(anomalies) * 25.0) if has_anomaly else 0.0
 
         return {
