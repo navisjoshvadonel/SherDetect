@@ -349,7 +349,8 @@ def get_audit_history(
         result = query.execute()
         return {"records": result.data, "total": len(result.data)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch audit history: {str(e)}")
+        print(f"[SherDetect] Supabase audit fetch offline/unreachable: {e}")
+        return {"records": [], "supabase": "offline", "error": str(e)}
 
 
 if __name__ == "__main__":

@@ -25,12 +25,11 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
           if [ -f ai_engine/requirements.txt ]; then pip install -r ai_engine/requirements.txt; fi
-          pip install pytest pytest-asyncio httpx
+          pip install pytest pytest-asyncio httpx starlette fastapi
 
-      - name: Run AI & Forensics Unit Tests
+      - name: Run AI & Backend Forensic Unit Tests
         run: |
-          if [ -d ai_engine/tests ]; then python -m pytest ai_engine/tests/ -v; fi
-          if [ -d backend/tests ]; then python -m pytest backend/tests/ -v; fi
+          python -m pytest ai_engine/tests/ backend/tests/ -v
 
   validate-frontend:
     name: Frontend Typecheck & Build
