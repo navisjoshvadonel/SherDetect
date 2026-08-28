@@ -1,8 +1,14 @@
+import sys
+import os
 import time
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from app.services.ela_engine import compute_ela_and_anomalies
-from app.services.ai_validator import validate_document_semantics
+
+# Add project root directory to path for cross-role imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
+from ai_engine.ela_engine import compute_ela_and_anomalies
+from ai_engine.ai_validator import validate_document_semantics
 
 app = FastAPI(title="SherDetect Forensics API", version="1.0.0")
 
