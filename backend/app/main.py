@@ -171,14 +171,36 @@ async def verify_document(file: UploadFile = File(...)):
             detail=f"Unsupported file type '{file.content_type}'. Allowed: JPEG, PNG, PDF.",
         )
 
-    contents = await file.read()
-    size_mb = len(contents) / (1024 * 1024)
-    if size_mb > MAX_FILE_SIZE_MB:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large ({size_mb:.1f} MB). Maximum: {MAX_FILE_SIZE_MB} MB.",
-        )
+    # ── Validate file size BEFORE reading full payload into memory ───────────
+    MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
+    # 1. Immediate rejection via Content-Length header if present
+    content_length = file.headers.get("content-length")
+    if content_length and content_length.isdigit():
+        if int(content_length) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds maximum allowed limit of {MAX_FILE_SIZE_MB} MB.",
+            )
+
+    # 2. Chunked streaming read with byte quota guard to prevent memory-exhaustion abuse
+    byte_chunks = []
+    total_bytes = 0
+    chunk_size = 1024 * 1024  # 1 MB chunks
+
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        total_bytes += len(chunk)
+        if total_bytes > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds maximum allowed limit of {MAX_FILE_SIZE_MB} MB.",
+            )
+        byte_chunks.append(chunk)
+
+    contents = b"".join(byte_chunks)
     file_name = file.filename or "uploaded_document.bin"
     doc_id = f"DOC-{uuid.uuid4().hex[:8].upper()}"
 

@@ -51,11 +51,41 @@ def get_demo_samples():
         ]
     }
 
+MAX_FILE_SIZE_MB = 50
+
 @app.post("/api/verify-document")
 async def verify_document(file: UploadFile = File(...)):
     start_time = time.time()
     try:
-        contents = await file.read()
+        MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+        # 1. Immediate rejection via Content-Length header if present
+        content_length = file.headers.get("content-length")
+        if content_length and content_length.isdigit():
+            if int(content_length) > MAX_FILE_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File exceeds maximum allowed limit of {MAX_FILE_SIZE_MB} MB.",
+                )
+
+        # 2. Chunked streaming read with byte quota guard
+        byte_chunks = []
+        total_bytes = 0
+        chunk_size = 1024 * 1024
+
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            total_bytes += len(chunk)
+            if total_bytes > MAX_FILE_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File exceeds maximum allowed limit of {MAX_FILE_SIZE_MB} MB.",
+                )
+            byte_chunks.append(chunk)
+
+        contents = b"".join(byte_chunks)
         file_name = file.filename or "uploaded_document.pdf"
         doc_id = f"DOC-{int(time.time()) % 10000:04d}"
 
