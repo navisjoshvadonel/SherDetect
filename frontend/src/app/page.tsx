@@ -137,9 +137,9 @@ export default function ForensicDashboard() {
     const docTypeObj = DOMAIN_CATEGORIES[domain]?.find((opt) => opt.val === docType);
     const docTypeLabel = docTypeObj ? docTypeObj.label : docType;
 
-    let generatedReport: ForensicReport = MOCK_FORGERY_REPORT;
+    let generatedReport: ForensicReport | null = null;
 
-    // Try Backend API (port 8001, Supabase-backed) → AI Engine (port 8000) → Mock
+    // Try Backend API (port 8001) → AI Engine (port 8000) → Next.js API Proxy (/api/verify-document)
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8001";
     const aiEngineUrl = process.env.NEXT_PUBLIC_AI_ENGINE_URL || "http://localhost:8000";
 
@@ -147,14 +147,14 @@ export default function ForensicDashboard() {
       const formData = new FormData();
       formData.append("file", file);
 
-      // Primary: backend/app/main.py (port 8001) — full pipeline + Supabase persistence
+      // 1. Primary: backend/app/main.py (port 8001) — full 6-layer pipeline + Supabase persistence
       let res = await fetch(`${backendUrl}/api/verify-document`, {
         method: "POST",
         body: formData,
         signal: AbortSignal.timeout(15000),
       }).catch(() => null);
 
-      // Fallback: ai_engine/server.py (port 8000) — standalone AI engine
+      // 2. Secondary: ai_engine/server.py (port 8000) — standalone AI engine
       if (!res || !res.ok) {
         const formData2 = new FormData();
         formData2.append("file", file);
@@ -165,17 +165,32 @@ export default function ForensicDashboard() {
         }).catch(() => null);
       }
 
+      // 3. Tertiary: Next.js API Proxy route (/api/verify-document)
+      if (!res || !res.ok) {
+        const formData3 = new FormData();
+        formData3.append("file", file);
+        res = await fetch(`/api/verify-document`, {
+          method: "POST",
+          body: formData3,
+          signal: AbortSignal.timeout(15000),
+        }).catch(() => null);
+      }
+
       if (res && res.ok) {
         generatedReport = await res.json();
       } else {
-        generatedReport = fileName.toLowerCase().includes("auth")
-          ? MOCK_AUTHENTIC_REPORT
-          : MOCK_FORGERY_REPORT;
+        const errJson = res ? await res.json().catch(() => null) : null;
+        const msg = errJson?.error || "SherDetect Python backend service is offline. Please start Python backend on port 8001.";
+        addToast(`Verification Error: ${msg}`, "danger");
+        return;
       }
-    } catch {
-      generatedReport = fileName.toLowerCase().includes("auth")
-        ? MOCK_AUTHENTIC_REPORT
-        : MOCK_FORGERY_REPORT;
+    } catch (err: any) {
+      addToast(`Verification Error: Could not connect to SherDetect backend service (${err?.message || "Connection refused"}).`, "danger");
+      return;
+    }
+
+    if (!generatedReport) {
+      return;
     }
 
     const newDocId = (105 + documents.length).toString();
