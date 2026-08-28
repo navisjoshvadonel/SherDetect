@@ -4,13 +4,14 @@ ai_engine/ai_validator.py
 Layer 2 & 3: Gemini Multimodal Semantic Reasoner & Offline Fallback Engine.
 Audits document text for mathematical parity (Line Items + Tax = Total),
 date chronologies, and ID checksums, with zero-downtime offline fallback.
+Powered by the official modern `google-genai` SDK.
 """
 
 import os
 import re
 import json
 from typing import Dict, Any, List
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 
 from ai_engine.pii_sanitizer import PIISanitizer
@@ -19,11 +20,13 @@ from ai_engine.checksum_validator import ChecksumValidator
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY", "").strip()
+_genai_client = None
+
 if api_key:
     try:
-        genai.configure(api_key=api_key)
-    except Exception:
-        pass
+        _genai_client = genai.Client(api_key=api_key)
+    except Exception as err:
+        print(f"[SherDetect AI] Gemini client setup notice: {err}")
 
 
 def extract_fallback_heuristics(text: str) -> Dict[str, Any]:
@@ -85,18 +88,17 @@ def extract_fallback_heuristics(text: str) -> Dict[str, Any]:
 
 async def validate_document_semantics(document_text: str) -> Dict[str, Any]:
     """
-    Validates document semantics using Gemini 1.5 Flash with PII protection.
+    Validates document semantics using modern Gemini 2.5/1.5 Flash via `google.genai` with PII protection.
     Falls back to deterministic offline heuristics on any API/network failure.
     """
     # Privacy safeguard: Scrub citizen PII before processing
     sanitized_text, _ = PIISanitizer.sanitize(document_text)
 
-    # If no API key configured, use offline fallback directly
-    if not api_key:
+    # If no API key configured or client failed, use offline fallback directly
+    if not api_key or not _genai_client:
         return extract_fallback_heuristics(sanitized_text)
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
         prompt = f"""
 Act as the SherDetect Lead Forensic Investigator.
 Inspect this sanitized document text for:
@@ -121,8 +123,11 @@ Respond ONLY with a valid JSON object matching this schema:
   "forensicSummary": "Concise forensic summary of findings"
 }}
 """
-        response = model.generate_content(prompt)
-        raw_text = response.text.strip()
+        response = _genai_client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
+        raw_text = response.text.strip() if response and response.text else ""
 
         # Resilient JSON extraction
         json_match = re.search(r"\{.*\}", raw_text, re.DOTALL)
