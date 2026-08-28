@@ -3,7 +3,8 @@ ai_engine/tests/test_ai_engine.py
 ---------------------------------
 Comprehensive Forensic Test Suite for SherDetect AI Engine.
 Tests Vision Forensics (ELA), Semantic Reasoner & Fallback,
-Benford's Law, Cryptographic Checksums, PII Masking, and Risk Fusion.
+Benford's Law, Cryptographic Checksums, PII Masking, Metadata Scanning,
+Sharpness Inconsistency, Sample Generators, and Multi-Vector Risk Fusion.
 """
 
 import os
@@ -20,6 +21,9 @@ from ai_engine.ai_validator import extract_fallback_heuristics, validate_documen
 from ai_engine.benford_inspector import BenfordInspector
 from ai_engine.checksum_validator import ChecksumValidator
 from ai_engine.pii_sanitizer import PIISanitizer
+from ai_engine.metadata_scanner import MetadataScanner
+from ai_engine.sharpness_inspector import SharpnessInspector
+from ai_engine.sample_generator import SampleGenerator
 from ai_engine.risk_scorer import RiskScorer
 
 
@@ -155,7 +159,50 @@ def test_pii_sanitization():
 
 
 # ==========================================
-# 6. Multi-Vector Risk Fusion Tests
+# 6. Binary Metadata & Sharpness Tests
+# ==========================================
+
+def test_metadata_scanner_detection():
+    """Tests that Photoshop byte signatures are flagged accurately."""
+    clean_bytes = b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01..."
+    res_clean = MetadataScanner.scan_bytes(clean_bytes)
+    assert not res_clean["isMetadataTampered"]
+
+    tampered_bytes = b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00Adobe Photoshop CC 2023 8BIM..."
+    res_tampered = MetadataScanner.scan_bytes(tampered_bytes)
+    assert res_tampered["isMetadataTampered"]
+    assert res_tampered["detectedSoftware"] == "Adobe Photoshop"
+
+
+def test_sharpness_inspector_execution():
+    """Validates that sharpness inspection runs on image bytes without crashing."""
+    clean_bytes = _create_synthetic_image(tampered=False)
+    res = SharpnessInspector.analyze_sharpness_inconsistency(clean_bytes)
+    assert isinstance(res, dict)
+    assert "hasSharpnessAnomaly" in res
+
+
+# ==========================================
+# 7. Sample Generator Fixture Tests
+# ==========================================
+
+def test_sample_generator_fixtures():
+    """Tests that all 5 demo sample fixtures generate valid bytes and text."""
+    samples = [
+        SampleGenerator.generate_clean_invoice(),
+        SampleGenerator.generate_spliced_invoice(),
+        SampleGenerator.generate_math_tampered_invoice(),
+        SampleGenerator.generate_benford_violated_invoice(),
+        SampleGenerator.generate_corrupted_id_sample()
+    ]
+    for s in samples:
+        assert len(s["imageBytes"]) > 0
+        assert len(s["text"]) > 0
+        assert "expectedVerdict" in s
+
+
+# ==========================================
+# 8. Multi-Vector Risk Fusion Tests
 # ==========================================
 
 def test_risk_scorer_aggregate_report():
