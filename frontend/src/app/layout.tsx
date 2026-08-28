@@ -2,9 +2,9 @@ import React from "react";
 import "./globals.css";
 
 export const metadata = {
-  title: "SherDetect — Multi-Domain AI Document Forensic & Verification Engine",
+  title: "SherDetect — Universal Multi-Domain Document Verification Platform",
   description:
-    "Autonomous document forensic audit suite for resumes, IDs, utility bills, degrees, legal contracts, and medical reports.",
+    "Multi-Domain Document Verification System — Resumes, Bills, IDs, Credentials & Legal",
 };
 
 export default function RootLayout({
@@ -14,7 +14,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="antialiased min-h-screen bg-slate-950 text-slate-100">
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
+        />
+      </head>
+      <body className="min-h-screen flex flex-col antialiased selection:bg-brutal-yellow selection:text-brutal-black bg-brutal-bg">
         {children}
       </body>
     </html>

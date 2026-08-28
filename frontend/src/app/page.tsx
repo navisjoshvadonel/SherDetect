@@ -191,7 +191,7 @@ export default function ForensicDashboard() {
     };
 
     setAuditLogs((prev) => [newLog, ...prev]);
-    addToast(`Document "${fileName}" successfully submitted for verification audit!`, "success");
+    addToast(`Document "${fileName}" submitted for verification review!`, "success");
   };
 
   // Decision Callback from Reviewer View
@@ -248,8 +248,8 @@ export default function ForensicDashboard() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950">
-      {/* Navigation Header */}
+    <div className="min-h-screen bg-brutal-bg text-brutal-black antialiased selection:bg-brutal-yellow selection:text-brutal-black flex flex-col">
+      {/* Top Navigation Bar */}
       <Header
         currentRole={currentRole}
         onRoleChange={setCurrentRole}
@@ -257,8 +257,8 @@ export default function ForensicDashboard() {
       />
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8">
-        {/* Multi-Domain Banner */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 space-y-8">
+        {/* Supported Domains Banner */}
         <DomainBanner
           activeDomainFilter={domainFilter}
           onSelectDomain={(domain) => setDomainFilter(domain)}
@@ -282,7 +282,7 @@ export default function ForensicDashboard() {
         )}
       </main>
 
-      {/* Toast Notifications */}
+      {/* Toast Overlay */}
       <ToastOverlay toasts={toasts} onDismiss={removeToast} />
     </div>
   );

@@ -1,19 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 3, 7, 18;
-  --background-end-rgb: 15, 23, 42;
+  --foreground-rgb: 18, 18, 18;
+  --background-rgb: 244, 244, 240;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  background-color: #f4f4f0;
+  color: #121212;
+  background-image: radial-gradient(#121212 0.75px, transparent 0.75px);
+  background-size: 24px 24px;
 }
+
+.neo-card {
+  background-color: #ffffff;
+  border: 3.5px solid #121212;
+  box-shadow: 6px 6px 0px #121212;
+  border-radius: 14px;
+  transition: all 0.15s ease-in-out;
+}
+
+.neo-card:hover {
+  box-shadow: 8px 8px 0px #121212;
+}
+
+.neo-btn {
+  border: 3px solid #121212;
+  box-shadow: 4px 4px 0px #121212;
+  font-weight: 800;
+  border-radius: 8px;
+  transition: all 0.1s ease;
+}
+
+.neo-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px #121212;
+}
+
+.neo-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #121212;
+}
+
+.neo-input {
+  border: 3px solid #121212;
+  box-shadow: 3px 3px 0px #121212;
+  border-radius: 8px;
+  background-color: #ffffff;
+  transition: all 0.15s ease;
+}
+
+.neo-input:focus {
+  outline: none;
+  box-shadow: 5px 5px 0px #121212;
+  background-color: #fffde6;
+}
+
+.drag-active {
+  background-color: #ffde59 !important;
+  border-color: #121212 !important;
+  transform: scale(1.02);
+}
+
+.neo-badge {
+  border: 2px solid #121212;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 2px 2px 0px #121212;
+}
+
+.badge-pending { background-color: #ffde59; color: #121212; }
+.badge-under_review { background-color: #5ce1e6; color: #121212; }
+.badge-verified { background-color: #7ed957; color: #121212; }
+.badge-rejected { background-color: #ff66c4; color: #121212; }
+.badge-resubmit { background-color: #ff914d; color: #121212; }
+
+@keyframes toastSlideIn {
+  from {
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-toast {
+  animation: toastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #f4f4f0; border-left: 2px solid #121212; }
+::-webkit-scrollbar-thumb { background: #ffde59; border: 2px solid #121212; border-radius: 4px; }

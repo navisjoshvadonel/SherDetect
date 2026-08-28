@@ -14,22 +14,23 @@ export const ToastOverlay: React.FC<ToastOverlayProps> = ({ toasts, onDismiss })
   return (
     <div className="fixed bottom-5 right-5 z-50 space-y-3 pointer-events-none max-w-sm w-full">
       {toasts.map((toast) => {
-        const typeStyles = {
-          success: "bg-emerald-950 border-emerald-500/50 text-emerald-300",
-          danger: "bg-rose-950 border-rose-500/50 text-rose-300",
-          warning: "bg-amber-950 border-amber-500/50 text-amber-300",
-          info: "bg-cyan-950 border-cyan-500/50 text-cyan-300",
+        const typeBg = {
+          success: "bg-brutal-green text-brutal-black",
+          danger: "bg-brutal-pink text-white",
+          warning: "bg-brutal-yellow text-brutal-black",
+          info: "bg-brutal-cyan text-brutal-black",
         }[toast.type];
 
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto p-4 rounded-xl border shadow-2xl flex items-center justify-between gap-3 text-xs font-semibold backdrop-blur-md transition-all ${typeStyles}`}
+            className={`pointer-events-auto p-4 border-3 border-brutal-black shadow-brutal-lg rounded-xl flex items-center justify-between gap-3 text-xs font-black uppercase transition-all duration-200 animate-toast ${typeBg}`}
           >
             <span>{toast.message}</span>
             <button
+              type="button"
               onClick={() => onDismiss(toast.id)}
-              className="text-slate-400 hover:text-white transition"
+              className="text-base font-black hover:scale-125 transition cursor-pointer px-1"
             >
               &times;
             </button>
