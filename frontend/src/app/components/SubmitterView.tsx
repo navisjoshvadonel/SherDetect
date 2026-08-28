@@ -105,32 +105,32 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
   ).length;
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Drag & Drop Upload Card */}
-        <div className="lg:col-span-1 neo-card p-5 flex flex-col justify-between">
+        <div className="lg:col-span-1 neo-card p-4 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-3 border-b-2.5 border-brutal-black pb-2.5">
-              <h3 className="font-black text-brutal-black text-sm flex items-center gap-2 uppercase">
-                <i className="fa-solid fa-cloud-arrow-up text-brutal-pink"></i>
+            <div className="flex items-center justify-between mb-2.5 border-b-2.5 border-brutal-black pb-2">
+              <h3 className="font-black text-brutal-black text-xs flex items-center gap-2 uppercase">
+                <i className="fa-solid fa-cloud-arrow-up text-brutal-pink animate-bounce"></i>
                 Upload Any Document
               </h3>
-              <span className="text-[10px] font-black bg-brutal-cyan text-brutal-black px-2 py-0.5 rounded border-2 border-brutal-black shadow-brutal-sm">
+              <span className="text-[9.5px] font-black bg-brutal-cyan text-brutal-black px-2 py-0.5 rounded border-2 border-brutal-black shadow-brutal-sm">
                 MAX 50MB
               </span>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} className="space-y-2.5">
               {/* Domain Select */}
               <div>
-                <label className="block text-[11px] font-black text-brutal-black mb-1 uppercase">
+                <label className="block text-[10.5px] font-black text-brutal-black mb-1 uppercase">
                   1. Select Target Domain *
                 </label>
                 <select
                   value={selectedDomain}
                   onChange={(e) => handleDomainChange(e.target.value as DomainKey)}
                   required
-                  className="w-full neo-input px-3 py-2 text-xs font-bold text-brutal-black"
+                  className="w-full neo-input px-2.5 py-1.5 text-xs font-bold text-brutal-black"
                 >
                   {(Object.keys(DOMAIN_LABELS) as DomainKey[]).map((key) => (
                     <option key={key} value={key}>
@@ -142,14 +142,14 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
 
               {/* Doc Type Select */}
               <div>
-                <label className="block text-[11px] font-black text-brutal-black mb-1 uppercase">
+                <label className="block text-[10.5px] font-black text-brutal-black mb-1 uppercase">
                   2. Document Type *
                 </label>
                 <select
                   value={selectedDocType}
                   onChange={(e) => setSelectedDocType(e.target.value)}
                   required
-                  className="w-full neo-input px-3 py-2 text-xs font-bold text-brutal-black"
+                  className="w-full neo-input px-2.5 py-1.5 text-xs font-bold text-brutal-black"
                 >
                   {DOMAIN_CATEGORIES[selectedDomain].map((opt) => (
                     <option key={opt.val} value={opt.val}>
@@ -161,15 +161,15 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
 
               {/* Drag & Drop Zone */}
               <div>
-                <label className="block text-[11px] font-black text-brutal-black mb-1 uppercase">
+                <label className="block text-[10.5px] font-black text-brutal-black mb-1 uppercase">
                   3. Drag &amp; Drop File (Any Format) *
                 </label>
                 <div
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`border-2.5 border-dashed border-brutal-black rounded-xl p-4 text-center cursor-pointer transition-all duration-200 bg-brutal-bg flex flex-col items-center justify-center relative ${
-                    dragActive ? "drag-active" : "hover:bg-brutal-yellow/10"
+                  className={`group border-2.5 border-dashed border-brutal-black rounded-xl p-3.5 text-center cursor-pointer transition-all duration-200 bg-brutal-bg flex flex-col items-center justify-center relative ${
+                    dragActive ? "drag-active" : "hover:bg-brutal-yellow/20"
                   }`}
                 >
                   <input
@@ -179,25 +179,25 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
                     accept="image/*,.pdf,.docx,.xlsx,.csv,.zip,.txt"
                   />
 
-                  <div className="w-10 h-10 rounded-xl bg-brutal-yellow border-2 border-brutal-black text-brutal-black flex items-center justify-center text-lg mb-1.5 shadow-brutal-sm group-hover:scale-110 transition-transform">
-                    <i className="fa-solid fa-file-arrow-up animate-bounce"></i>
+                  <div className="w-9 h-9 rounded-xl bg-brutal-yellow border-2 border-brutal-black text-brutal-black flex items-center justify-center text-base mb-1 shadow-brutal-sm group-hover:scale-110 group-hover:rotate-6 transition-transform">
+                    <i className="fa-solid fa-file-arrow-up text-brutal-black"></i>
                   </div>
 
-                  <p className="text-[11px] font-black text-brutal-black mb-0.5 uppercase">
+                  <p className="text-[10.5px] font-black text-brutal-black mb-0.5 uppercase">
                     DRAG &amp; DROP FILE HERE, OR{" "}
                     <span className="bg-brutal-cyan px-1 border border-brutal-black rounded">
                       BROWSE
                     </span>
                   </p>
-                  <p className="text-[10px] font-bold text-slate-600">
+                  <p className="text-[9.5px] font-bold text-slate-600">
                     Supports PDF, DOCX, XLSX, PNG, JPG, CSV, ZIP, TXT up to 50MB
                   </p>
 
                   {selectedFile && (
-                    <div className="mt-2 p-1.5 rounded-lg bg-brutal-green border-2 border-brutal-black text-xs font-black text-brutal-black w-full flex items-center justify-center gap-2 shadow-brutal-sm animate-toast">
+                    <div className="mt-2 p-1.5 rounded-lg bg-brutal-green border-2 border-brutal-black text-[11px] font-black text-brutal-black w-full flex items-center justify-center gap-1.5 shadow-brutal-sm animate-toast">
                       <i className={getFormatIconClass(selectedFile.name.split(".").pop() || "")}></i>
-                      <span className="truncate max-w-[140px]">{selectedFile.name}</span>
-                      <span className="text-[10px] bg-white px-1 border border-brutal-black rounded">
+                      <span className="truncate max-w-[130px]">{selectedFile.name}</span>
+                      <span className="text-[9.5px] bg-white px-1 border border-brutal-black rounded">
                         {(selectedFile.size / 1024).toFixed(1)} KB
                       </span>
                     </div>
@@ -209,9 +209,9 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
               <button
                 type="submit"
                 disabled={!selectedFile}
-                className={`w-full py-2.5 neo-btn text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 ${
+                className={`w-full py-2 neo-btn text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 ${
                   selectedFile
-                    ? "bg-brutal-yellow text-brutal-black cursor-pointer shadow-brutal"
+                    ? "bg-brutal-yellow text-brutal-black cursor-pointer shadow-brutal hover:scale-[1.01]"
                     : "bg-slate-200 text-slate-400 border-slate-400 cursor-not-allowed shadow-none"
                 }`}
               >
@@ -223,38 +223,38 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
         </div>
 
         {/* Submitter Documents List & Status Tracker */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-3">
           {/* Stats Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="neo-card p-3 bg-white transition-transform hover:-translate-y-1">
-              <span className="text-[11px] font-black uppercase text-slate-600 block">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="neo-card p-2.5 bg-white transition-transform hover:-translate-y-1">
+              <span className="text-[10px] font-black uppercase text-slate-600 block">
                 Total Submissions
               </span>
-              <span className="text-2xl font-black text-brutal-black mt-0.5 block font-mono">
+              <span className="text-xl font-black text-brutal-black mt-0.5 block font-mono">
                 {totalCount}
               </span>
             </div>
-            <div className="neo-card p-3 bg-brutal-yellow transition-transform hover:-translate-y-1">
-              <span className="text-[11px] font-black uppercase text-brutal-black block">
+            <div className="neo-card p-2.5 bg-brutal-yellow transition-transform hover:-translate-y-1">
+              <span className="text-[10px] font-black uppercase text-brutal-black block">
                 Pending Review
               </span>
-              <span className="text-2xl font-black text-brutal-black mt-0.5 block font-mono">
+              <span className="text-xl font-black text-brutal-black mt-0.5 block font-mono">
                 {pendingCount}
               </span>
             </div>
-            <div className="neo-card p-3 bg-brutal-green transition-transform hover:-translate-y-1">
-              <span className="text-[11px] font-black uppercase text-brutal-black block">
+            <div className="neo-card p-2.5 bg-brutal-green transition-transform hover:-translate-y-1">
+              <span className="text-[10px] font-black uppercase text-brutal-black block">
                 Verified Docs
               </span>
-              <span className="text-2xl font-black text-brutal-black mt-0.5 block font-mono">
+              <span className="text-xl font-black text-brutal-black mt-0.5 block font-mono">
                 {verifiedCount}
               </span>
             </div>
-            <div className="neo-card p-3 bg-brutal-pink transition-transform hover:-translate-y-1">
-              <span className="text-[11px] font-black uppercase text-brutal-black block">
+            <div className="neo-card p-2.5 bg-brutal-pink transition-transform hover:-translate-y-1">
+              <span className="text-[10px] font-black uppercase text-brutal-black block">
                 Action Needed
               </span>
-              <span className="text-2xl font-black text-brutal-black mt-0.5 block font-mono">
+              <span className="text-xl font-black text-brutal-black mt-0.5 block font-mono">
                 {actionNeededCount}
               </span>
             </div>
@@ -262,31 +262,31 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
 
           {/* Documents Table */}
           <div className="neo-card overflow-hidden">
-            <div className="p-3 border-b-2.5 border-brutal-black flex items-center justify-between bg-white">
+            <div className="p-2.5 border-b-2.5 border-brutal-black flex items-center justify-between bg-white">
               <h3 className="font-black text-brutal-black text-xs flex items-center gap-2 uppercase">
                 <i className="fa-solid fa-folder-tree text-brutal-cyan"></i>
                 My Submitted Documents &amp; Status ({filteredDocs.length})
               </h3>
-              <span className="text-[10px] font-black bg-brutal-bg px-2.5 py-0.5 border border-brutal-black rounded shadow-brutal-sm">
+              <span className="text-[9.5px] font-black bg-brutal-bg px-2 py-0.5 border border-brutal-black rounded shadow-brutal-sm">
                 User ID #USR-88219
               </span>
             </div>
 
-            <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+            <div className="max-h-[290px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-left text-xs font-bold">
                 <thead className="bg-brutal-yellow border-b-2.5 border-brutal-black text-brutal-black uppercase font-black sticky top-0 z-10">
                   <tr>
-                    <th className="p-2.5 border-r-2 border-brutal-black">Domain</th>
-                    <th className="p-2.5 border-r-2 border-brutal-black">Document Type</th>
-                    <th className="p-2.5 border-r-2 border-brutal-black">File Name</th>
-                    <th className="p-2.5 border-r-2 border-brutal-black">Status</th>
-                    <th className="p-2.5 text-right">Action</th>
+                    <th className="p-2 border-r-2 border-brutal-black">Domain</th>
+                    <th className="p-2 border-r-2 border-brutal-black">Document Type</th>
+                    <th className="p-2 border-r-2 border-brutal-black">File Name</th>
+                    <th className="p-2 border-r-2 border-brutal-black">Status</th>
+                    <th className="p-2 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y-2 divide-brutal-black text-brutal-black bg-white">
                   {filteredDocs.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-6 text-center text-slate-500 font-bold">
+                      <td colSpan={5} className="p-5 text-center text-slate-500 font-bold">
                         No documents match the current domain filter.
                       </td>
                     </tr>
@@ -294,30 +294,31 @@ export const SubmitterView: React.FC<SubmitterViewProps> = ({
                     filteredDocs.map((doc) => (
                       <tr
                         key={doc.id}
-                        className="hover:bg-brutal-yellow/20 transition-all duration-150 animate-row-slide"
+                        className="hover:bg-brutal-yellow/20 transition-all duration-150 animate-row-slide group"
                       >
-                        <td className="p-2.5 border-r-2 border-brutal-black uppercase text-[10px] font-black text-slate-700">
+                        <td className="p-2 border-r-2 border-brutal-black uppercase text-[9.5px] font-black text-slate-700">
                           {doc.domainDisplay}
                         </td>
-                        <td className="p-2.5 border-r-2 border-brutal-black">{doc.docTypeDisplay}</td>
-                        <td className="p-2.5 border-r-2 border-brutal-black font-mono text-[11px]">
+                        <td className="p-2 border-r-2 border-brutal-black text-[11px]">{doc.docTypeDisplay}</td>
+                        <td className="p-2 border-r-2 border-brutal-black font-mono text-[10.5px]">
                           <i className={`${getFormatIconClass(doc.fileExt)} me-1.5`}></i>
                           {doc.fileName}
                         </td>
-                        <td className="p-2.5 border-r-2 border-brutal-black">
+                        <td className="p-2 border-r-2 border-brutal-black">
                           <span
-                            className={`neo-badge badge-${doc.status} text-[10px] px-2 py-0.5 rounded-md inline-block`}
+                            className={`neo-badge badge-${doc.status} text-[9.5px] px-2 py-0.5 rounded-md inline-block`}
                           >
                             {doc.status.replace("_", " ")}
                           </span>
                         </td>
-                        <td className="p-2.5 text-right">
+                        <td className="p-2 text-right">
                           <button
                             type="button"
                             onClick={() => onInspectDocument(doc.id)}
-                            className="neo-btn px-2.5 py-1 text-[10px] bg-brutal-yellow text-brutal-black uppercase hover:scale-105 active:scale-95"
+                            className="neo-btn px-2 py-0.5 text-[9.5px] bg-brutal-yellow text-brutal-black uppercase hover:scale-105 active:scale-95 flex items-center justify-end gap-1 ml-auto group-hover:bg-brutal-cyan transition-colors"
                           >
-                            Inspect
+                            <span>Inspect</span>
+                            <i className="fa-solid fa-arrow-right text-[8px] transition-transform group-hover:translate-x-0.5"></i>
                           </button>
                         </td>
                       </tr>

@@ -20,13 +20,13 @@ body {
 .neo-card {
   background-color: #ffffff;
   border: 3px solid #121212;
-  box-shadow: 5px 5px 0px #121212;
+  box-shadow: 4.5px 4.5px 0px #121212;
   border-radius: 14px;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .neo-card:hover {
-  box-shadow: 7px 7px 0px #121212;
+  box-shadow: 6.5px 6.5px 0px #121212;
 }
 
 .neo-btn {
@@ -39,7 +39,7 @@ body {
 
 .neo-btn:hover {
   transform: translate(-2px, -2px);
-  box-shadow: 5.5px 5.5px 0px #121212;
+  box-shadow: 5px 5px 0px #121212;
 }
 
 .neo-btn:active {
@@ -82,7 +82,7 @@ body {
 .badge-rejected { background-color: #ff66c4; color: #121212; }
 .badge-resubmit { background-color: #ff914d; color: #121212; }
 
-/* Custom Animations */
+/* Dynamic Micro-Animations */
 @keyframes toastSlideIn {
   from {
     transform: translateY(20px) scale(0.95);
@@ -99,22 +99,40 @@ body {
 }
 
 @keyframes scanline {
-  0% { top: 0%; opacity: 0.8; }
+  0% { top: 0%; opacity: 0.85; }
   50% { opacity: 1; }
-  100% { top: 95%; opacity: 0.8; }
+  100% { top: 96%; opacity: 0.85; }
 }
 
 .animate-scanline {
-  animation: scanline 2.5s ease-in-out infinite alternate;
+  animation: scanline 2.2s ease-in-out infinite alternate;
 }
 
-@keyframes pulseGlow {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.85; transform: scale(1.03); }
+@keyframes iconPop {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(10deg); }
 }
 
-.animate-pulse-glow {
-  animation: pulseGlow 2s ease-in-out infinite;
+.animate-icon-pop {
+  animation: iconPop 1.8s ease-in-out infinite;
+}
+
+@keyframes floatGlow {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
+}
+
+.animate-float-glow {
+  animation: floatGlow 2.5s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.animate-badge-pulse {
+  animation: badgePulse 1.6s ease-in-out infinite;
 }
 
 @keyframes rowSlide {
@@ -126,7 +144,7 @@ body {
   animation: rowSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Screen-fitted scrollbars */
-.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Custom Fitted Scrollbars */
+.custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: #f4f4f0; border-left: 2px solid #121212; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #ffde59; border: 2px solid #121212; border-radius: 4px; }
