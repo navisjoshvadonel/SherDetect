@@ -39,3 +39,7 @@ skills-lock.json
 # Python compiled caches in subdirs
 backend/app/__pycache__/
 backend/app/services/__pycache__/
+
+# Supabase CLI temp files
+supabase/.temp/
+
