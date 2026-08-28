@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
-import { ForensicReport } from "../../../contracts/api-spec";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { ForensicReport } from "@/contracts/api-spec";
 
 // Lazy initialization for Gemini client
-let aiClient: GoogleGenAI | null = null;
-function getGeminiClient(): GoogleGenAI | null {
+let aiClient: GoogleGenerativeAI | null = null;
+function getGeminiClient(): GoogleGenerativeAI | null {
   if (!aiClient && process.env.GEMINI_API_KEY) {
     try {
-      aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      aiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     } catch {
       aiClient = null;
     }
@@ -21,7 +21,7 @@ function extractFallbackHeuristics(fileName: string, text: string) {
     fileName.toLowerCase().includes("fake") ||
     fileName.toLowerCase().includes("tamper") ||
     fileName.toLowerCase().includes("sample_forged");
-  
+
   const isAuthKeyword =
     fileName.toLowerCase().includes("auth") ||
     fileName.toLowerCase().includes("valid") ||
@@ -73,18 +73,18 @@ export async function POST(req: NextRequest) {
     const ai = getGeminiClient();
     if (ai) {
       try {
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: `Act as SherDetect Lead Forensic Investigator. Inspect this document text and metadata for math parity, date logic, and tax checksum inconsistencies:
+        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const response = await model.generateContent(
+          `Act as SherDetect Lead Forensic Investigator. Inspect this document text and metadata for math parity, date logic, and tax checksum inconsistencies:
 ${simulatedText}
 
 Respond ONLY with valid JSON with keys:
 "semanticDiscrepancy": boolean,
 "forensicSummary": string,
-"isAuthentic": boolean`,
-        });
+"isAuthentic": boolean`
+        );
 
-        const raw = (response.text || "").replace(/```json/g, "").replace(/```/g, "").trim();
+        const raw = (response.response.text() || "").replace(/```json/g, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(raw);
         semanticDiscrepancy = Boolean(parsed.semanticDiscrepancy);
         isForged = !parsed.isAuthentic || semanticDiscrepancy || fileName.toLowerCase().includes("forged");

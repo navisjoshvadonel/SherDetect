@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { ForensicReport } from "../../../contracts/api-spec";
+import { ForensicReport } from "@/contracts/api-spec";
 
 interface ForensicCanvasProps {
   report?: ForensicReport;

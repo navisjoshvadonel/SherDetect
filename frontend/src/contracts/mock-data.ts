@@ -1,8 +1,7 @@
-// contracts/mock-data.ts
 import { ForensicReport } from "./api-spec";
 
 export const MOCK_FORGERY_REPORT: ForensicReport = {
-  documentId: "DOC-FORGERY-9821",
+  documentId: "DOC-9842-FORGED",
   isAuthentic: false,
   fraudRiskScore: 94.5,
   verdict: "FORGERY_DETECTED",
@@ -30,26 +29,25 @@ export const MOCK_FORGERY_REPORT: ForensicReport = {
       confidence: 0.89,
     },
   ],
-  tamperHeatmapBase64: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  tamperHeatmapBase64:
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
   forensicSummary:
     "Critical tampering detected. Error Level Analysis indicates re-compression artifacts on line-item values. Metadata reveals Adobe Photoshop export signatures with mismatched PDF creation dates.",
-  processingTimeMs: 1420,
+  processingTimeMs: 342,
 };
 
 export const MOCK_AUTHENTIC_REPORT: ForensicReport = {
-  documentId: "DOC-AUTH-1044",
+  documentId: "DOC-1024-AUTHENTIC",
   isAuthentic: true,
   fraudRiskScore: 4.2,
   verdict: "VERIFIED_AUTHENTIC",
   forensicBreakdown: {
     elaScore: 6.5,
     metadataTampered: false,
-    softwareFingerprintDetected: undefined,
     semanticDiscrepancy: false,
   },
   detectedAnomalies: [],
-  tamperHeatmapBase64: undefined,
   forensicSummary:
     "Document passed all forensic audits. Compression levels are uniform across all layers, metadata headers are intact, and mathematical parity is verified.",
-  processingTimeMs: 890,
+  processingTimeMs: 189,
 };

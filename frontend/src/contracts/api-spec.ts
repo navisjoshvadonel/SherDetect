@@ -1,4 +1,4 @@
-// contracts/api-spec.ts
+// frontend/src/contracts/api-spec.ts
 
 export interface AnomalyBoundingBox {
   x: number; // percentage (0 - 100) from left
