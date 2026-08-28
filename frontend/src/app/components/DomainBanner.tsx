@@ -97,17 +97,21 @@ export const DomainBanner: React.FC<DomainBannerProps> = ({
               key={d.key}
               type="button"
               onClick={() => onSelectDomain && onSelectDomain(isSelected ? "all" : d.key)}
-              className={`group p-2 ${d.bgColor} border-2 border-brutal-black rounded-xl text-center shadow-brutal-sm transition-all duration-200 cursor-pointer ${
+              className={`group p-2.5 ${d.bgColor} border-2.5 border-brutal-black rounded-xl text-center shadow-brutal-sm transition-all duration-200 cursor-pointer flex flex-col items-center justify-center ${
                 isSelected
                   ? "ring-3 ring-brutal-black bg-brutal-yellow -translate-y-1 shadow-brutal scale-102"
                   : "hover:-translate-y-1 hover:shadow-brutal hover:scale-[1.02]"
               }`}
             >
-              <i className={`${d.icon} text-base text-brutal-black mb-1 block transition-all duration-300 group-hover:scale-125 group-hover:rotate-12`}></i>
-              <span className="text-[10.5px] font-black uppercase text-brutal-black block truncate">
+              {/* Prominent Logo Icon Badge */}
+              <div className="w-8 h-8 bg-white border-2 border-brutal-black rounded-lg shadow-brutal-sm flex items-center justify-center mb-1.5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110">
+                <i className={`${d.icon} text-sm text-brutal-black`}></i>
+              </div>
+
+              <span className="text-[10.5px] font-black uppercase text-brutal-black block truncate w-full">
                 {DOMAIN_LABELS[d.key]}
               </span>
-              <span className="text-[9px] font-bold text-slate-700 block truncate mt-0.5">
+              <span className="text-[9px] font-extrabold text-slate-700 block truncate w-full mt-0.5">
                 {d.description}
               </span>
             </button>

@@ -33,10 +33,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <i className="fa-solid fa-shield-halved text-brutal-black"></i>
                 AI Forensics Suite
               </span>
-              <span className="text-[9px] font-mono font-black bg-brutal-green text-brutal-black px-2 py-0.5 rounded border border-brutal-black hidden sm:inline-flex items-center gap-1.5 shadow-brutal-sm">
-                <span className="w-1.5 h-1.5 bg-emerald-700 rounded-full animate-ping"></span>
-                AI Engine: Active
-              </span>
             </div>
             <p className="text-[11px] font-extrabold text-slate-700">
               AI-Powered Document Integrity &amp; Forgery Detection Platform
