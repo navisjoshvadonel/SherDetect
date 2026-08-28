@@ -1,143 +1,160 @@
--- ============================================================
--- SherDetect Supabase Schema Migration
--- Project: ieeruyttmratjqrmyixz
--- Run this in: Supabase Dashboard → SQL Editor → New Query
--- ============================================================
+-- ==============================================================================
+-- SherDetect Production Database Schema & Security Migration
+-- Migration ID: 20260828_sherdetect_schema
+-- Description: Creates forensic audit tables with Row-Level Security (RLS) policies
+-- ==============================================================================
 
--- ─── 1. AUDIT REPORTS TABLE ──────────────────────────────────────────────────
--- Stores every forensic verification result from the backend API
-CREATE TABLE IF NOT EXISTS public.audit_reports (
-  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  document_id          TEXT NOT NULL,
-  file_name            TEXT NOT NULL,
-  is_authentic         BOOLEAN NOT NULL,
-  verdict              TEXT NOT NULL CHECK (verdict IN ('VERIFIED_AUTHENTIC', 'SUSPICIOUS', 'FORGERY_DETECTED')),
-  fraud_risk_score     FLOAT NOT NULL CHECK (fraud_risk_score >= 0 AND fraud_risk_score <= 100),
-  ela_score            FLOAT NOT NULL DEFAULT 0,
-  metadata_tampered    BOOLEAN NOT NULL DEFAULT FALSE,
-  software_detected    TEXT,
-  semantic_discrepancy BOOLEAN NOT NULL DEFAULT FALSE,
-  forensic_summary     TEXT NOT NULL,
-  processing_time_ms   INTEGER NOT NULL DEFAULT 0,
-  anomaly_count        INTEGER NOT NULL DEFAULT 0,
-  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ─── 2. DOCUMENT SUBMISSIONS TABLE ───────────────────────────────────────────
--- Tracks submitted documents and their workflow statuses
+-- 1. Create Document Submissions Tracking Table
 CREATE TABLE IF NOT EXISTS public.document_submissions (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_name   TEXT NOT NULL DEFAULT 'Anonymous',
-  domain          TEXT NOT NULL,
-  doc_type        TEXT NOT NULL,
-  file_name       TEXT NOT NULL,
-  file_ext        TEXT NOT NULL DEFAULT 'bin',
-  file_size_bytes INTEGER,
-  status          TEXT NOT NULL DEFAULT 'pending'
-                  CHECK (status IN ('pending', 'under_review', 'verified', 'rejected', 'resubmit')),
-  notes           TEXT,
-  report_id       UUID REFERENCES public.audit_reports(id) ON DELETE SET NULL,
-  submitted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  reviewed_at     TIMESTAMPTZ
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    doc_id VARCHAR(64) NOT NULL UNIQUE,
+    file_name VARCHAR(255) NOT NULL,
+    file_ext VARCHAR(16) NOT NULL,
+    domain VARCHAR(64) NOT NULL DEFAULT 'all',
+    doc_type VARCHAR(64) NOT NULL DEFAULT 'general',
+    customer_name VARCHAR(128) NOT NULL DEFAULT 'Anonymous Submitter',
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ─── 3. VERIFIER AUDIT TRAIL TABLE ───────────────────────────────────────────
--- Immutable log of every action taken by submitters and verifiers
+-- 2. Create Audit Reports Table (Forensic Inspection Results)
+CREATE TABLE IF NOT EXISTS public.audit_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    doc_id VARCHAR(64) NOT NULL REFERENCES public.document_submissions(doc_id) ON DELETE CASCADE,
+    file_name VARCHAR(255) NOT NULL,
+    is_authentic BOOLEAN NOT NULL DEFAULT FALSE,
+    verdict VARCHAR(64) NOT NULL DEFAULT 'UNVERIFIED',
+    ela_score NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
+    fraud_risk_score NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
+    metadata_tampered BOOLEAN NOT NULL DEFAULT FALSE,
+    software_fingerprint VARCHAR(255),
+    semantic_discrepancy BOOLEAN NOT NULL DEFAULT FALSE,
+    forensic_summary TEXT,
+    processing_time_ms INTEGER NOT NULL DEFAULT 0,
+    detected_anomalies_count INTEGER NOT NULL DEFAULT 0,
+    tamper_heatmap_base64 TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 3. Create Audit Trail Log Table (Immutable Event History)
 CREATE TABLE IF NOT EXISTS public.audit_trail (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  doc_id      TEXT NOT NULL,
-  action      TEXT NOT NULL CHECK (action IN ('submitted', 'under_review', 'verified', 'rejected', 'resubmit', 'inspected')),
-  actor       TEXT NOT NULL DEFAULT 'System',
-  note        TEXT,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    doc_id VARCHAR(64) NOT NULL,
+    action VARCHAR(64) NOT NULL,
+    actor VARCHAR(128) NOT NULL DEFAULT 'System',
+    note TEXT,
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ─── 4. INDEXES FOR PERFORMANCE ──────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_audit_reports_verdict     ON public.audit_reports(verdict);
-CREATE INDEX IF NOT EXISTS idx_audit_reports_created_at  ON public.audit_reports(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_reports_authentic   ON public.audit_reports(is_authentic);
-CREATE INDEX IF NOT EXISTS idx_submissions_status        ON public.document_submissions(status);
-CREATE INDEX IF NOT EXISTS idx_submissions_domain        ON public.document_submissions(domain);
-CREATE INDEX IF NOT EXISTS idx_trail_doc_id              ON public.audit_trail(doc_id);
-CREATE INDEX IF NOT EXISTS idx_trail_created_at          ON public.audit_trail(created_at DESC);
+-- ─── INDEXES FOR HIGH-THROUGHPUT FORENSIC LOOKUPS ────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_submissions_doc_id ON public.document_submissions(doc_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_domain ON public.document_submissions(domain);
+CREATE INDEX IF NOT EXISTS idx_audit_reports_doc_id ON public.audit_reports(doc_id);
+CREATE INDEX IF NOT EXISTS idx_audit_reports_verdict ON public.audit_reports(verdict);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_doc_id ON public.audit_trail(doc_id);
 
--- ─── 5. ROW LEVEL SECURITY (RLS) ──────────────────────────────────────────────
--- Enable RLS (required for Supabase exposed schemas)
-ALTER TABLE public.audit_reports         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.document_submissions  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.audit_trail           ENABLE ROW LEVEL SECURITY;
+-- ==============================================================================
+-- ROW-LEVEL SECURITY (RLS) ENABLEMENT & POLICIES
+-- ==============================================================================
 
--- Allow anon & authenticated roles to read audit reports (public forensic results)
-CREATE POLICY "Allow public read on audit_reports"
-  ON public.audit_reports FOR SELECT
-  TO anon, authenticated
-  USING (true);
+-- Enable Row-Level Security on all public forensic tables
+ALTER TABLE public.document_submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_trail ENABLE ROW LEVEL SECURITY;
 
--- Allow backend service to insert audit reports (via service_role key in backend)
-CREATE POLICY "Allow insert on audit_reports"
-  ON public.audit_reports FOR INSERT
-  TO anon, authenticated
-  WITH CHECK (true);
+-- ─── 1. document_submissions Policies ────────────────────────────────────────
 
--- Allow public read on submissions
-CREATE POLICY "Allow public read on document_submissions"
-  ON public.document_submissions FOR SELECT
-  TO anon, authenticated
-  USING (true);
+-- Allow anon & authenticated users to view document submissions
+CREATE POLICY "Allow public select on document_submissions"
+ON public.document_submissions
+FOR SELECT
+TO anon, authenticated
+USING (true);
 
--- Allow insert on submissions
-CREATE POLICY "Allow insert on document_submissions"
-  ON public.document_submissions FOR INSERT
-  TO anon, authenticated
-  WITH CHECK (true);
+-- Allow anon & authenticated users to insert new document submissions
+CREATE POLICY "Allow public insert on document_submissions"
+ON public.document_submissions
+FOR INSERT
+TO anon, authenticated
+WITH CHECK (true);
 
--- Allow update status on submissions
-CREATE POLICY "Allow update on document_submissions"
-  ON public.document_submissions FOR UPDATE
-  TO anon, authenticated
-  USING (true)
-  WITH CHECK (true);
+-- Allow authenticated users / service role to update document submission status
+CREATE POLICY "Allow authenticated update on document_submissions"
+ON public.document_submissions
+FOR UPDATE
+TO authenticated
+USING (true)
+WITH CHECK (true);
 
--- Allow public read on audit trail
-CREATE POLICY "Allow public read on audit_trail"
-  ON public.audit_trail FOR SELECT
-  TO anon, authenticated
-  USING (true);
+-- ─── 2. audit_reports Policies ───────────────────────────────────────────────
 
--- Allow insert on audit trail
-CREATE POLICY "Allow insert on audit_trail"
-  ON public.audit_trail FOR INSERT
-  TO anon, authenticated
-  WITH CHECK (true);
+-- Allow public select access to forensic audit reports
+CREATE POLICY "Allow public select on audit_reports"
+ON public.audit_reports
+FOR SELECT
+TO anon, authenticated
+USING (true);
 
--- ─── 6. SEED DEMO DATA ────────────────────────────────────────────────────────
--- Insert sample audit records so the dashboard has data on first load
+-- Allow backend service API to write forensic reports
+CREATE POLICY "Allow service insert on audit_reports"
+ON public.audit_reports
+FOR INSERT
+TO anon, authenticated
+WITH CHECK (true);
+
+-- ─── 3. audit_trail Policies ──────────────────────────────────────────────────
+
+-- Allow public select on audit event trail
+CREATE POLICY "Allow public select on audit_trail"
+ON public.audit_trail
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+-- Allow backend service API to append event logs
+CREATE POLICY "Allow service insert on audit_trail"
+ON public.audit_trail
+FOR INSERT
+TO anon, authenticated
+WITH CHECK (true);
+
+-- ==============================================================================
+-- INITIAL DEMO SEED DATA
+-- ==============================================================================
+
+INSERT INTO public.document_submissions (doc_id, file_name, file_ext, domain, doc_type, customer_name, status, notes)
+VALUES
+('DOC-DEMO01', 'Resume_Alex_Taylor.pdf', 'pdf', 'hr_employment', 'cv', 'Alex Taylor', 'pending', 'Uploaded resume PDF for HR verification audit.'),
+('DOC-DEMO02', 'Utility_Bill_July2026.png', 'png', 'billing_finance', 'utility_bill', 'Alex Taylor', 'rejected', 'Uploaded electricity bill statement for verification audit.'),
+('DOC-DEMO03', 'Passport_Scan_Taylor.jpg', 'jpg', 'identity_kyc', 'passport', 'Alex Taylor', 'verified', 'Uploaded passport scan for identity verification audit.')
+ON CONFLICT (doc_id) DO NOTHING;
+
 INSERT INTO public.audit_reports (
-  document_id, file_name, is_authentic, verdict, fraud_risk_score,
-  ela_score, metadata_tampered, software_detected, semantic_discrepancy,
-  forensic_summary, processing_time_ms, anomaly_count
+  doc_id, file_name, is_authentic, verdict, ela_score, fraud_risk_score,
+  metadata_tampered, software_fingerprint, semantic_discrepancy, forensic_summary,
+  processing_time_ms, detected_anomalies_count
 ) VALUES
 (
-  'DOC-DEMO01', 'Alex_Taylor_Resume_2026.pdf', TRUE,
-  'VERIFIED_AUTHENTIC', 3.8,
-  6.5, FALSE, NULL, FALSE,
-  'Document passed all compression, cryptographic checksum, and semantic parity checks.',
-  119, 0
+  'DOC-DEMO01', 'Resume_Alex_Taylor.pdf', TRUE,
+  'VERIFIED_AUTHENTIC', 5.2, 8.4, FALSE, NULL, FALSE,
+  'Document passed all forensic audits. Compression levels are uniform across all layers, metadata headers are intact, and mathematical parity is verified.',
+  112, 0
 ),
 (
-  'DOC-DEMO02', 'Forged_Electricity_Bill_July.pdf', FALSE,
-  'FORGERY_DETECTED', 88.5,
-  88.2, TRUE, 'Adobe Photoshop CC 2023', TRUE,
-  'Critical tampering detected. ELA indicates re-compression artifacts on line-item values. EXIF metadata contains Adobe Photoshop export signature.',
-  85, 1
+  'DOC-DEMO02', 'Utility_Bill_July2026.png', FALSE,
+  'FORGERY_DETECTED', 88.2, 94.5, TRUE, 'Adobe Photoshop CC 2023 (Macintosh)', TRUE,
+  'Critical tampering detected. Error Level Analysis indicates re-compression artifacts on line-item values. Metadata reveals Adobe Photoshop export signatures with mismatched creation dates.',
+  145, 2
 ),
 (
   'DOC-DEMO03', 'Passport_Scan_Taylor.jpg', TRUE,
-  'VERIFIED_AUTHENTIC', 4.1,
-  5.2, FALSE, NULL, FALSE,
+  'VERIFIED_AUTHENTIC', 4.1, 5.2, FALSE, NULL, FALSE,
   'Document passed all compression, cryptographic checksum, and semantic parity checks.',
   98, 0
-);
+)
+ON CONFLICT DO NOTHING;
 
 INSERT INTO public.audit_trail (doc_id, action, actor, note)
 VALUES
@@ -145,9 +162,3 @@ VALUES
 ('DOC-DEMO02', 'submitted', 'Alex Taylor', 'Uploaded electricity bill statement for verification audit.'),
 ('DOC-DEMO03', 'verified',  'Verifier Sarah Jenkins', 'Passport scan verified intact without ELA tampering.'),
 ('DOC-DEMO02', 'rejected',  'Verifier Officer', 'FORGERY_DETECTED: Total amount manipulated using image editing software.');
-
--- ─── DONE ─────────────────────────────────────────────────────────────────────
--- Verify tables were created:
-SELECT table_name FROM information_schema.tables
-WHERE table_schema = 'public'
-ORDER BY table_name;
