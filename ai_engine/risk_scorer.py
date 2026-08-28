@@ -2,8 +2,8 @@
 ai_engine/risk_scorer.py
 ------------------------
 Multi-Vector Weighted Fraud Risk Fusion & Verdict Engine.
-Fuses visual (ELA), semantic (Gemini/Heuristic), statistical (Benford),
-and cryptographic (Verhoeff/Luhn) vectors into a unified fraud risk score.
+Fuses visual (ELA & Sharpness), semantic (Gemini/Heuristic), statistical (Benford),
+binary metadata, and cryptographic (Verhoeff/Luhn) vectors into a calibrated score.
 """
 
 from typing import Dict, List, Any, Optional
@@ -13,9 +13,10 @@ class RiskScorer:
     """
     Fuses multiple independent forensic vectors into a calibrated risk score (0 - 100).
     """
-    WEIGHT_ELA = 0.40
-    WEIGHT_SEMANTIC = 0.35
-    WEIGHT_BENFORD = 0.15
+    WEIGHT_ELA = 0.35
+    WEIGHT_SEMANTIC = 0.30
+    WEIGHT_METADATA = 0.15
+    WEIGHT_BENFORD = 0.10
     WEIGHT_CHECKSUM = 0.10
 
     @classmethod
@@ -29,6 +30,7 @@ class RiskScorer:
         benford_result: Optional[Dict[str, Any]] = None,
         metadata_tampered: bool = False,
         software_detected: Optional[str] = None,
+        sharpness_result: Optional[Dict[str, Any]] = None,
         processing_time_ms: int = 0
     ) -> Dict[str, Any]:
         """
@@ -37,30 +39,36 @@ class RiskScorer:
         # Vector 1: ELA Score (0-100)
         v_ela = float(min(100.0, max(0.0, ela_score)))
 
-        # Vector 2: Semantic Discrepancy Score (0 or 90.0)
+        # Vector 2: Semantic Discrepancy Score (0 or 92.0)
         has_semantic_flag = semantic_result.get("semanticDiscrepancy", False)
         v_semantic = 92.0 if has_semantic_flag else 5.0
 
-        # Vector 3: Benford Statistical Anomaly Score (0-100)
+        # Vector 3: Metadata / Software Fingerprint
+        v_meta = 95.0 if metadata_tampered else 0.0
+
+        # Vector 4: Benford Statistical Anomaly Score (0-100)
         v_benford = float(benford_result.get("anomalyRiskScore", 0.0)) if benford_result else 0.0
 
-        # Vector 4: Checksum / Metadata tampering
-        v_checksum = 95.0 if metadata_tampered else 0.0
+        # Vector 5: Checksum / ID validation
+        has_checksum_flag = any("ID_CHECKSUM_FAILURE" in a.get("type", "") for a in semantic_result.get("detectedAnomalies", []))
+        v_checksum = 95.0 if has_checksum_flag else 0.0
 
         # Weighted calculation
         raw_risk = (
             (v_ela * cls.WEIGHT_ELA) +
             (v_semantic * cls.WEIGHT_SEMANTIC) +
+            (v_meta * cls.WEIGHT_METADATA) +
             (v_benford * cls.WEIGHT_BENFORD) +
             (v_checksum * cls.WEIGHT_CHECKSUM)
         )
 
-        # Force high risk if multiple distinct anomaly layers trigger
+        # Multi-Trigger Non-Linear Escalator
         anomaly_triggers = [
             len(pixel_anomalies) > 0,
             has_semantic_flag,
+            metadata_tampered,
             benford_result.get("isBenfordAnomaly", False) if benford_result else False,
-            metadata_tampered
+            sharpness_result.get("hasSharpnessAnomaly", False) if sharpness_result else False
         ]
         trigger_count = sum(1 for t in anomaly_triggers if t)
 
@@ -81,16 +89,20 @@ class RiskScorer:
         else:
             verdict = "FORGERY_DETECTED"
 
-        # Merge anomaly bounding boxes and text notes
+        # Combine pixel and sharpness bounding boxes
         combined_anomalies = list(pixel_anomalies)
+        if sharpness_result and sharpness_result.get("hasSharpnessAnomaly"):
+            combined_anomalies.extend(sharpness_result.get("detectedAnomalies", []))
 
-        # Summary resolution
+        # Forensic Summary resolution
         if has_semantic_flag:
             summary = semantic_result.get("forensicSummary", "Document failed mathematical or semantic consistency checks.")
         elif len(pixel_anomalies) > 0:
             summary = f"Pixel splicing detected across {len(pixel_anomalies)} region(s) with anomalous JPEG compression artifacts."
         elif metadata_tampered:
             summary = f"Digital editing software signature detected: {software_detected or 'Modified EXIF'}."
+        elif sharpness_result and sharpness_result.get("hasSharpnessAnomaly"):
+            summary = sharpness_result.get("summary", "Sharpness inconsistency detected.")
         else:
             summary = "Document passed all compression, cryptographic checksum, and semantic parity checks."
 
