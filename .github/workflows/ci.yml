@@ -25,11 +25,12 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
           if [ -f ai_engine/requirements.txt ]; then pip install -r ai_engine/requirements.txt; fi
-          pip install pytest
+          pip install pytest pytest-asyncio httpx
 
       - name: Run AI & Forensics Unit Tests
         run: |
           if [ -d ai_engine/tests ]; then python -m pytest ai_engine/tests/ -v; fi
+          if [ -d backend/tests ]; then python -m pytest backend/tests/ -v; fi
 
   validate-frontend:
     name: Frontend Typecheck & Build
@@ -38,7 +39,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Check package.json existence
+        id: check_pkg
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "has_pkg=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_pkg=false" >> $GITHUB_OUTPUT
+            echo "No frontend package.json found yet, skipping build."
+          fi
+
       - name: Set up Node.js 20
+        if: steps.check_pkg.outputs.has_pkg == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -46,9 +58,11 @@ jobs:
           cache-dependency-path: frontend/package.json
 
       - name: Install Frontend Dependencies
+        if: steps.check_pkg.outputs.has_pkg == 'true'
         working-directory: ./frontend
         run: npm ci || npm install
 
       - name: Run Next.js Build
+        if: steps.check_pkg.outputs.has_pkg == 'true'
         working-directory: ./frontend
         run: npm run build
