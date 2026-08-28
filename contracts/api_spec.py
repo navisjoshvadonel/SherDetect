@@ -1,35 +1,28 @@
-"""
-Python Pydantic Schema representation of contracts/api-spec.ts for Backend & AI Engineer team.
-Ensure 1:1 schema parity with Frontend TypeScript interfaces.
-"""
-
-from typing import List, Optional, Literal
+# contracts/api_spec.py
+from typing import List, Optional
 from pydantic import BaseModel, Field
-
 
 class AnomalyBoundingBox(BaseModel):
     x: float = Field(..., description="Percentage (0 - 100) from left")
     y: float = Field(..., description="Percentage (0 - 100) from top")
     width: float = Field(..., description="Percentage (0 - 100)")
     height: float = Field(..., description="Percentage (0 - 100)")
-    label: str = Field(..., description='Anomaly label e.g., "Pixel Splicing", "Font Inconsistency"')
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score 0.0 to 1.0")
-
+    label: str = Field(..., description="e.g. Pixel Splicing, Font Inconsistency")
+    confidence: float = Field(..., description="Confidence score from 0.0 to 1.0")
 
 class ForensicBreakdown(BaseModel):
     elaScore: float = Field(..., description="Error Level Analysis score (0 - 100)")
-    metadataTampered: bool = Field(..., description="Whether document EXIF metadata shows modification traces")
-    softwareFingerprintDetected: Optional[str] = Field(None, description='e.g., "Adobe Photoshop CS6", "Canva"')
-    semanticDiscrepancy: bool = Field(..., description="Whether content semantic verification failed")
-
+    metadataTampered: bool = Field(..., description="Whether metadata signatures indicate tampering")
+    softwareFingerprintDetected: Optional[str] = Field(None, description="e.g. Adobe Photoshop CS6, Canva")
+    semanticDiscrepancy: bool = Field(..., description="Whether mathematical or semantic logic failed")
 
 class ForensicReport(BaseModel):
     documentId: str
     isAuthentic: bool
-    fraudRiskScore: float = Field(..., ge=0.0, le=100.0, description="0 (Safe) to 100 (Critical Fraud)")
-    verdict: Literal["VERIFIED_AUTHENTIC", "SUSPICIOUS", "FORGERY_DETECTED"]
+    fraudRiskScore: float = Field(..., description="0 (Safe) to 100 (Critical Fraud)")
+    verdict: str = Field(..., description="VERIFIED_AUTHENTIC | SUSPICIOUS | FORGERY_DETECTED")
     forensicBreakdown: ForensicBreakdown
-    detectedAnomalies: List[AnomalyBoundingBox]
-    tamperHeatmapBase64: Optional[str] = Field(None, description="Base64 encoded PNG overlay of tamper heatmap")
-    forensicSummary: str = Field(..., description="AI generated textual report summary")
+    detectedAnomalies: List[AnomalyBoundingBox] = Field(default_factory=list)
+    tamperHeatmapBase64: Optional[str] = None
+    forensicSummary: str
     processingTimeMs: int

@@ -9,17 +9,19 @@ export interface AnomalyBoundingBox {
   confidence: number; // 0.0 to 1.0
 }
 
+export interface ForensicBreakdown {
+  elaScore: number; // Error Level Analysis score (0 - 100)
+  metadataTampered: boolean;
+  softwareFingerprintDetected?: string; // e.g., "Adobe Photoshop CS6", "Canva"
+  semanticDiscrepancy: boolean;
+}
+
 export interface ForensicReport {
   documentId: string;
   isAuthentic: boolean;
   fraudRiskScore: number; // 0 (Safe) to 100 (Critical Fraud)
   verdict: "VERIFIED_AUTHENTIC" | "SUSPICIOUS" | "FORGERY_DETECTED";
-  forensicBreakdown: {
-    elaScore: number; // Error Level Analysis score (0 - 100)
-    metadataTampered: boolean;
-    softwareFingerprintDetected?: string; // e.g., "Adobe Photoshop CS6", "Canva"
-    semanticDiscrepancy: boolean;
-  };
+  forensicBreakdown: ForensicBreakdown;
   detectedAnomalies: AnomalyBoundingBox[];
   tamperHeatmapBase64?: string;
   forensicSummary: string;

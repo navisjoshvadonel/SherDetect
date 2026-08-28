@@ -1,53 +1,55 @@
 // contracts/mock-data.ts
-import { ForensicReport } from './api-spec';
+import { ForensicReport } from "./api-spec";
 
 export const MOCK_FORGERY_REPORT: ForensicReport = {
-  documentId: "doc_hackathon_99812",
+  documentId: "DOC-FORGERY-9821",
   isAuthentic: false,
-  fraudRiskScore: 87.5,
+  fraudRiskScore: 94.5,
   verdict: "FORGERY_DETECTED",
   forensicBreakdown: {
-    elaScore: 84.2,
+    elaScore: 88.2,
     metadataTampered: true,
-    softwareFingerprintDetected: "Adobe Photoshop 24.1 (Windows)",
+    softwareFingerprintDetected: "Adobe Photoshop CC 2023 (Macintosh)",
     semanticDiscrepancy: true,
   },
   detectedAnomalies: [
     {
-      x: 18.5,
-      y: 42.0,
-      width: 25.0,
-      height: 8.5,
-      label: "Pixel Splicing & ELA Spike",
-      confidence: 0.94,
+      x: 62.5,
+      y: 41.2,
+      width: 18.0,
+      height: 6.5,
+      label: "Pixel Splicing & Compression Anomaly",
+      confidence: 0.96,
     },
     {
-      x: 52.0,
-      y: 68.3,
-      width: 30.0,
-      height: 12.0,
-      label: "Font Inconsistency & Alignment Artifact",
-      confidence: 0.88,
+      x: 70.1,
+      y: 78.4,
+      width: 22.0,
+      height: 5.0,
+      label: "Font Kerning & Alignment Discrepancy",
+      confidence: 0.89,
     },
   ],
   tamperHeatmapBase64: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  forensicSummary: "High confidence document alteration detected. Error Level Analysis (ELA) identified distinct compression level mismatches near the financial totals box. EXIF analysis confirms metadata modification via Adobe Photoshop. Font spacing and glyph metrics deviate significantly from standard bank statement templates.",
-  processingTimeMs: 412,
+  forensicSummary:
+    "Critical tampering detected. Error Level Analysis indicates re-compression artifacts on line-item values. Metadata reveals Adobe Photoshop export signatures with mismatched PDF creation dates.",
+  processingTimeMs: 1420,
 };
 
 export const MOCK_AUTHENTIC_REPORT: ForensicReport = {
-  documentId: "doc_hackathon_99813",
+  documentId: "DOC-AUTH-1044",
   isAuthentic: true,
   fraudRiskScore: 4.2,
   verdict: "VERIFIED_AUTHENTIC",
   forensicBreakdown: {
-    elaScore: 5.1,
+    elaScore: 6.5,
     metadataTampered: false,
     softwareFingerprintDetected: undefined,
     semanticDiscrepancy: false,
   },
   detectedAnomalies: [],
   tamperHeatmapBase64: undefined,
-  forensicSummary: "Document passed all automated visual, metadata, and structural integrity checks. No pixel splicing, font anomalies, or software modification traces detected.",
-  processingTimeMs: 295,
+  forensicSummary:
+    "Document passed all forensic audits. Compression levels are uniform across all layers, metadata headers are intact, and mathematical parity is verified.",
+  processingTimeMs: 890,
 };
