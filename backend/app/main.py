@@ -51,6 +51,7 @@ from ai_engine.checksum_validator import ChecksumValidator
 from ai_engine.metadata_scanner import MetadataScanner
 from ai_engine.sharpness_inspector import SharpnessInspector
 from ai_engine.pii_sanitizer import PIISanitizer
+from ai_engine.document_text import extract_document_text
 from ai_engine.risk_scorer import RiskScorer
 from contracts.api_spec import (
     ForensicReport, ForensicBreakdown, AnomalyBoundingBox
@@ -219,19 +220,9 @@ async def verify_document(file: UploadFile = File(...)):
         try:
             ela_score, heatmap_b64, raw_anomalies = compute_ela_and_anomalies(contents)
         except Exception:
-            # Fallback for non-image payloads (PDF, DOCX binary)
-            is_likely_forged = (
-                "forged" in file_name.lower()
-                or "fake" in file_name.lower()
-                or "tamper" in file_name.lower()
-                or metadata_res["isMetadataTampered"]
-            )
-            ela_score = 88.2 if is_likely_forged else 6.5
-            raw_anomalies = (
-                [{"x": 62.5, "y": 41.2, "width": 18.0, "height": 6.5,
-                  "label": "Pixel Splicing & Compression Anomaly", "confidence": 0.96}]
-                if is_likely_forged else []
-            )
+            # ELA is image-only. Do not invent a score or anomaly for PDFs.
+            ela_score = 0.0
+            raw_anomalies = []
             heatmap_b64 = None
 
         # ── Layer 3: Laplacian Sharpness Inconsistency ────────────────────────
@@ -250,40 +241,30 @@ async def verify_document(file: UploadFile = File(...)):
             for a in raw_anomalies
         ]
 
-        # ── Layer 4: PII Sanitize + Benford's Law ─────────────────────────────
-        simulated_text = (
-            f"Document: {file_name}. Subtotal: 450.00, Tax: 50.00, "
-            f"Total: {'1450.00' if ela_score > 35 else '500.00'}"
-        )
-        sanitized_text, _ = PIISanitizer.sanitize(simulated_text)
+        # ── Layer 4: Extract document text, then sanitize before numeric/LLM checks
+        extracted_text = extract_document_text(contents, file.content_type)
+        if not extracted_text:
+            extracted_text = "No machine-readable document text was available for semantic audit."
+        sanitized_text, _ = PIISanitizer.sanitize(extracted_text)
         benford_res = BenfordInspector.analyze_benford(sanitized_text)
 
         # ── Layer 5: Cryptographic Checksum (Verhoeff + Luhn) ─────────────────
         checksum_res = ChecksumValidator.audit_document_ids(sanitized_text)
 
         # ── Layer 6: Gemini AI Semantic Audit ─────────────────────────────────
-        ai_res = await validate_document_semantics(sanitized_text)
-
-        # Enrich semantic verdict for clearly forged files
-        if "forged" in file_name.lower() or ela_score > 60:
-            ai_res["semanticDiscrepancy"] = True
-            ai_res.setdefault(
-                "forensicSummary",
-                "Critical tampering detected. ELA compression artifacts found on "
-                "line-item values. Metadata contains Adobe Photoshop export signatures.",
-            )
+        ai_res = await validate_document_semantics(
+            sanitized_text,
+            file.content_type or "unknown",
+            contents,
+        )
 
         processing_time_ms = int((time.time() - start_time) * 1000)
 
         # ── Determine software fingerprint ────────────────────────────────────
-        detected_software = (
-            metadata_res.get("detectedSoftware")
-            or ("Adobe Photoshop CC 2023" if ela_score > 60 else None)
-        )
+        detected_software = metadata_res.get("detectedSoftware")
         is_metadata_tampered = (
             metadata_res["isMetadataTampered"]
             or checksum_res["hasChecksumAnomaly"]
-            or "forged" in file_name.lower()
         )
 
         # ── Multi-Vector Risk Fusion ───────────────────────────────────────────
@@ -296,6 +277,7 @@ async def verify_document(file: UploadFile = File(...)):
             benford_result=benford_res,
             metadata_tampered=is_metadata_tampered,
             software_detected=detected_software,
+            sharpness_result=sharpness_res,
             processing_time_ms=processing_time_ms,
         )
 

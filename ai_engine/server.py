@@ -1,4 +1,5 @@
 import io
+import os
 import time
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +14,7 @@ from ai_engine.sharpness_inspector import SharpnessInspector
 from ai_engine.pii_sanitizer import PIISanitizer
 from ai_engine.risk_scorer import RiskScorer
 from ai_engine.sample_generator import SampleGenerator
+from ai_engine.document_text import extract_document_text
 
 app = FastAPI(
     title="SherDetect AI Forensic Engine API",
@@ -100,19 +102,12 @@ async def verify_document(file: UploadFile = File(...)):
 
         # 2. ELA & Anomaly Bounding Box Detection
         try:
-            image = Image.open(io.BytesIO(contents)).convert("RGB")
-            ela_score, anomalies, heatmap_base64 = compute_ela_and_anomalies(image)
+            ela_score, heatmap_base64, anomalies = compute_ela_and_anomalies(contents)
         except Exception:
-            # Fallback if binary/non-image format
-            is_forged = "forged" in file_name.lower() or "fake" in file_name.lower() or "tamper" in file_name.lower() or metadata_res["isMetadataTampered"]
-            ela_score = 88.2 if is_forged else 6.5
-            anomalies = [
-                {
-                    "x": 62.5, "y": 41.2, "width": 18.0, "height": 6.5,
-                    "label": "Pixel Splicing & Compression Anomaly", "confidence": 0.96
-                }
-            ] if is_forged else []
-            heatmap_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" if is_forged else None
+            # ELA is image-only. Do not invent a score or anomaly for PDFs.
+            ela_score = 0.0
+            anomalies = []
+            heatmap_base64 = None
 
         # 3. Laplacian Variance Edge Sharpness Inconsistency Inspection
         sharpness_res = SharpnessInspector.analyze_sharpness_inconsistency(contents)
@@ -120,26 +115,27 @@ async def verify_document(file: UploadFile = File(...)):
             anomalies.extend(sharpness_res["detectedAnomalies"])
 
         # 4. Text extraction simulation & PII sanitization
-        simulated_text = f"Document: {file_name}. Subtotal: 450.00, Tax: 50.00, Total: {'1450.00' if 'forged' in file_name.lower() else '500.00'}"
-        sanitized_text, _ = PIISanitizer.sanitize(simulated_text)
+        extracted_text = extract_document_text(contents, file.content_type)
+        if not extracted_text:
+            extracted_text = "No machine-readable document text was available for semantic audit."
+        sanitized_text, _ = PIISanitizer.sanitize(extracted_text)
 
         # 5. Checksum Arithmetic & Benford Analysis
         checksum_res = ChecksumValidator.audit_document_ids(sanitized_text)
         benford_res = BenfordInspector.analyze_benford(sanitized_text)
 
         # 6. Gemini AI Semantic Validation
-        ai_res = await validate_document_semantics(sanitized_text)
-
-        # Force semantic anomaly if file is marked forged in test
-        if "forged" in file_name.lower():
-            ai_res["semanticDiscrepancy"] = True
-            ai_res["forensicSummary"] = "Critical tampering detected. Error Level Analysis indicates re-compression artifacts on line-item values. Metadata reveals Adobe Photoshop export signatures with mismatched PDF creation dates."
+        ai_res = await validate_document_semantics(
+            sanitized_text,
+            file.content_type or "unknown",
+            contents,
+        )
 
         processing_time_ms = int((time.time() - start_time) * 1000)
 
         # Combine detected software signatures
-        detected_software = metadata_res.get("detectedSoftware") or ("Adobe Photoshop CC 2023" if "forged" in file_name.lower() else None)
-        is_metadata_tampered = metadata_res["isMetadataTampered"] or ("forged" in file_name.lower()) or checksum_res["hasChecksumAnomaly"]
+        detected_software = metadata_res.get("detectedSoftware")
+        is_metadata_tampered = metadata_res["isMetadataTampered"] or checksum_res["hasChecksumAnomaly"]
 
         # 7. Combined Risk Scoring via RiskScorer
         report = RiskScorer.aggregate_forensic_report(
@@ -151,6 +147,7 @@ async def verify_document(file: UploadFile = File(...)):
             benford_result=benford_res,
             metadata_tampered=is_metadata_tampered,
             software_detected=detected_software,
+            sharpness_result=sharpness_res,
             processing_time_ms=processing_time_ms
         )
 

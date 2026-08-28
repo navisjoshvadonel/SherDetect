@@ -9,6 +9,7 @@ import os
 import sys
 import io
 import pytest
+import fitz
 from PIL import Image, ImageDraw
 from fastapi.testclient import TestClient
 
@@ -18,6 +19,7 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from backend.app.main import app
+from ai_engine.sample_generator import SampleGenerator
 
 
 def test_health_endpoint():
@@ -52,6 +54,60 @@ def test_verify_document_authentic_png():
     assert "verdict" in report
     assert "forensicBreakdown" in report
     assert report["verdict"] in ["VERIFIED_AUTHENTIC", "SUSPICIOUS", "FORGERY_DETECTED"]
+
+
+def test_neutral_filename_clean_jpg_is_not_forced_to_forgery():
+    """A clean image must be classified from evidence, not its filename."""
+    client = TestClient(app)
+    sample = Image.new("RGB", (240, 160), color="white")
+    buffer = io.BytesIO()
+    sample.save(buffer, format="JPEG", quality=90)
+    response = client.post(
+        "/api/verify-document",
+        files={"file": ("customer_upload.jpg", io.BytesIO(buffer.getvalue()), "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["verdict"] in ["VERIFIED_AUTHENTIC", "SUSPICIOUS"]
+
+
+def test_pdf_content_mismatch_is_detected_without_forged_filename():
+    """A PDF's extracted figures must drive semantic detection."""
+    pdf = fitz.open()
+    page = pdf.new_page()
+    page.insert_text((72, 72), "Invoice\nSubtotal: $200.00\nTax: $20.00\nTotal: $9500.00")
+
+    response = TestClient(app).post(
+        "/api/verify-document",
+        files={"file": ("customer_upload.pdf", io.BytesIO(pdf.tobytes()), "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["forensicBreakdown"]["semanticDiscrepancy"] is True
+    assert report["verdict"] == "FORGERY_DETECTED"
+
+
+def test_pixel_evidence_changes_risk_for_spliced_jpg():
+    """Localized image manipulation must produce a different, high-risk result."""
+    client = TestClient(app)
+    clean = SampleGenerator.generate_clean_invoice()
+    spliced = SampleGenerator.generate_spliced_invoice()
+    clean_response = client.post(
+        "/api/verify-document",
+        files={"file": ("clean_upload.jpg", io.BytesIO(clean["imageBytes"]), "image/jpeg")},
+    )
+    spliced_response = client.post(
+        "/api/verify-document",
+        files={"file": ("edited_upload.jpg", io.BytesIO(spliced["imageBytes"]), "image/jpeg")},
+    )
+
+    assert clean_response.status_code == 200
+    assert spliced_response.status_code == 200
+    clean_report = clean_response.json()
+    spliced_report = spliced_response.json()
+    assert spliced_report["fraudRiskScore"] > clean_report["fraudRiskScore"]
+    assert spliced_report["verdict"] == "FORGERY_DETECTED"
 
 
 def test_verify_document_unsupported_media_type():

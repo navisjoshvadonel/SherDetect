@@ -29,7 +29,7 @@ if api_key:
         print(f"[SherDetect AI] Gemini client setup notice: {err}")
 
 
-def extract_fallback_heuristics(text: str) -> Dict[str, Any]:
+def extract_fallback_heuristics(text: str, file_format: str = "unknown") -> Dict[str, Any]:
     """
     Resilient offline heuristic engine.
     Guarantees 100% uptime during live hackathon demos when offline or API key is missing.
@@ -74,6 +74,7 @@ def extract_fallback_heuristics(text: str) -> Dict[str, Any]:
             })
 
     has_anomaly = len(discrepancies) > 0
+    has_document_evidence = text.strip() and not text.startswith("No machine-readable")
     return {
         "semanticDiscrepancy": has_anomaly,
         "detectedAnomalies": discrepancies,
@@ -82,11 +83,20 @@ def extract_fallback_heuristics(text: str) -> Dict[str, Any]:
             if has_anomaly
             else "Document content passes baseline semantic and mathematical parity checks."
         ),
-        "source": "offline_heuristics"
+        "source": "offline_heuristics",
+        "file_format_observed": file_format,
+        "format_bias_mitigation": "File quality and format were ignored; only extracted content and deterministic checks were evaluated.",
+        "text_content_analysis": "Deterministic arithmetic and checksum checks completed; issuer, signatory, branding, and verification-link checks require extracted evidence.",
+        "confidence_score": 0.9 if has_anomaly else (0.45 if has_document_evidence else 0.0),
+        "final_classification": "Forgery" if has_anomaly else ("Genuine" if has_document_evidence else "Unverifiable")
     }
 
 
-async def validate_document_semantics(document_text: str) -> Dict[str, Any]:
+async def validate_document_semantics(
+    document_text: str,
+    file_format: str = "unknown",
+    document_bytes: bytes | None = None,
+) -> Dict[str, Any]:
     """
     Validates document semantics using modern Gemini 2.5/1.5 Flash via `google.genai` with PII protection.
     Falls back to deterministic offline heuristics on any API/network failure.
@@ -96,15 +106,26 @@ async def validate_document_semantics(document_text: str) -> Dict[str, Any]:
 
     # If no API key configured or client failed, use offline fallback directly
     if not api_key or not _genai_client:
-        return extract_fallback_heuristics(sanitized_text)
+        return extract_fallback_heuristics(sanitized_text, file_format)
 
     try:
         prompt = f"""
-Act as the SherDetect Lead Forensic Investigator.
-Inspect this sanitized document text for:
-1. Mathematical parity (subtotal + tax = total).
-2. Date chronologies and logic.
-3. Negative or absurd figures.
+    Act as a document classification AI specializing in certificate fraud.
+    The observed file format is {file_format}, but format, resolution, compression,
+    lighting, and vector cleanliness are NEVER evidence of authenticity.
+
+    Actively reverse format bias:
+    - A noisy or compressed JPG can be genuine. Judge its extracted words, issuer,
+      signatory, branding, course facts, and verification path.
+    - A pristine PDF can be forged. A typo, wrong signatory, generic seal, missing
+      authorized platform, or invalid credential path is a serious red flag.
+
+    Audit in this order:
+    1. Check every extracted word for spelling and phrasing errors.
+    2. Check signatory authority against the issuing division.
+    3. Check official partnership/platform branding and logo anomalies.
+    4. Check credential IDs and direct verification URLs.
+    5. Check mathematical parity, dates, and absurd figures where applicable.
 
 Document Content:
 \"\"\"
@@ -113,6 +134,11 @@ Document Content:
 
 Respond ONLY with a valid JSON object matching this schema:
 {{
+    "file_format_observed": "clean PDF or noisy JPG",
+    "format_bias_mitigation": "Explain that file quality was ignored",
+    "text_content_analysis": "List typos, signatory, branding, and factual findings",
+    "final_classification": "Genuine or Forgery",
+    "confidence_score": 0.0,
   "semanticDiscrepancy": false,
   "detectedAnomalies": [
     {{
@@ -123,10 +149,13 @@ Respond ONLY with a valid JSON object matching this schema:
   "forensicSummary": "Concise forensic summary of findings"
 }}
 """
-        response = _genai_client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt
-        )
+        contents: Any = prompt
+        if document_bytes and file_format in {"image/jpeg", "image/png", "application/pdf"}:
+            contents = [
+                prompt,
+                genai.types.Part.from_bytes(data=document_bytes, mime_type=file_format),
+            ]
+        response = _genai_client.models.generate_content(model="gemini-1.5-flash", contents=contents)
         raw_text = response.text.strip() if response and response.text else ""
 
         # Resilient JSON extraction
@@ -134,9 +163,14 @@ Respond ONLY with a valid JSON object matching this schema:
         if json_match:
             parsed = json.loads(json_match.group(0))
             parsed["source"] = "gemini_1.5_flash"
+            parsed.setdefault("file_format_observed", file_format)
+            parsed.setdefault("format_bias_mitigation", "File quality and format were ignored; content and issuer evidence were prioritized.")
+            parsed.setdefault("text_content_analysis", parsed.get("forensicSummary", "No additional textual findings were returned."))
+            parsed.setdefault("final_classification", "Forgery" if parsed.get("semanticDiscrepancy") else "Unverifiable")
+            parsed.setdefault("confidence_score", 0.0)
             return parsed
         else:
-            return extract_fallback_heuristics(sanitized_text)
+            return extract_fallback_heuristics(sanitized_text, file_format)
     except Exception:
         # Fallback seamlessly on rate-limit, network error, or timeout
-        return extract_fallback_heuristics(sanitized_text)
+        return extract_fallback_heuristics(sanitized_text, file_format)

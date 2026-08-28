@@ -59,10 +59,10 @@ def compute_ela_and_anomalies(
 
     anomalies: List[Dict[str, Any]] = []
 
-    # Step 3: Localize anomalous error spikes if peak differential is significant
+    # Step 3: Localize only absolute error spikes; normalized noise made clean JPEGs look forged.
     if max_val > 12:
-        norm = cv2.normalize(diff_magnitude, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-        _, thresh = cv2.threshold(norm, threshold_val, 255, cv2.THRESH_BINARY)
+        absolute_threshold = max(12.0, mean_val + (float(np.std(diff_magnitude)) * 4.0))
+        thresh = np.where(diff_magnitude >= absolute_threshold, 255, 0).astype(np.uint8)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
         contours, _ = cv2.findContours(cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

@@ -91,10 +91,42 @@ class RiskScorer:
         ]
         trigger_count = sum(1 for t in anomaly_triggers if t)
 
-        if trigger_count >= 2:
-            raw_risk = max(raw_risk, 88.5)
-        elif trigger_count == 1:
-            raw_risk = max(raw_risk, 55.0)
+        if trigger_count:
+            # Scale reinforcement from the current evidence; never return a fixed demo score.
+            raw_risk += trigger_count * (8.0 + (raw_risk * 0.08))
+
+        # A deterministic arithmetic or checksum contradiction is stronger than a generic semantic flag.
+        semantic_anomaly_types = {
+            "MATH_MISMATCH",
+            "ID_CHECKSUM_FAILURE",
+            "PAYMENT_CHECKSUM_FAILURE",
+        }
+        has_deterministic_semantic_failure = any(
+            anomaly.get("type") in semantic_anomaly_types
+            for anomaly in semantic_result.get("detectedAnomalies", [])
+        )
+        if has_deterministic_semantic_failure:
+            raw_risk = max(raw_risk, 65.0)
+
+        # Gemini/content classification is authoritative over format-only visual noise.
+        final_classification = str(semantic_result.get("final_classification", "")).strip().lower()
+        try:
+            content_confidence = float(semantic_result.get("confidence_score", 0.0))
+        except (TypeError, ValueError):
+            content_confidence = 0.0
+        content_verified = final_classification == "genuine" and content_confidence >= 0.70
+
+        if pixel_anomalies and not content_verified:
+            # Pixel artifacts alone are format-sensitive; strong localized evidence raises risk without a fixed score.
+            raw_risk = max(raw_risk, 50.0 + (v_ela * 0.35))
+
+        if final_classification == "forgery":
+            raw_risk = max(raw_risk, 65.0)
+        elif content_verified:
+            # A high-confidence content verdict wins over compression, blur, or camera noise.
+            raw_risk = min(raw_risk, 24.9)
+        elif final_classification == "unverifiable":
+            raw_risk = max(raw_risk, 25.0)
 
         # Clamping and rounding
         fraud_risk_score = round(min(100.0, max(2.5, raw_risk)), 1)

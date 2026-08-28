@@ -96,6 +96,13 @@ async def test_authentic_invoice_semantics():
     assert len(result.get("detectedAnomalies", [])) == 0
 
 
+def test_format_bias_metadata_is_explicit():
+    result = extract_fallback_heuristics("Google Coursera certificate verification URL", "image/jpeg")
+    assert result["file_format_observed"] == "image/jpeg"
+    assert "quality and format were ignored" in result["format_bias_mitigation"]
+    assert result["final_classification"] == "Genuine"
+
+
 @pytest.mark.asyncio
 async def test_tampered_invoice_semantics():
     """Validates that mathematical disparity triggers semantic discrepancy."""

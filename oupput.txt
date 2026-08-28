@@ -1,0 +1,7 @@
+cd E:\SherDetect
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn backend.app.main:app --reload --port 8001
+cd E:\SherDetect\frontend
+npm run dev
+cd d:\SherDetect\frontend-refresh-v2
+npm.cmd run dev
