@@ -1,152 +1,289 @@
 "use client";
+
 import React, { useState } from "react";
+import { Header } from "./components/Header";
+import { DomainBanner } from "./components/DomainBanner";
+import { SubmitterView } from "./components/SubmitterView";
+import { ReviewerView } from "./components/ReviewerView";
+import { ToastOverlay } from "./components/ToastOverlay";
+import {
+  DomainKey,
+  DocumentItem,
+  AuditLogItem,
+  ToastMessage,
+  DOMAIN_CATEGORIES,
+  DOMAIN_LABELS,
+} from "./types";
 import { MOCK_FORGERY_REPORT, MOCK_AUTHENTIC_REPORT } from "../../../contracts/mock-data";
 import { ForensicReport } from "../../../contracts/api-spec";
 
 export default function ForensicDashboard() {
-  const [report, setReport] = useState<ForensicReport>(MOCK_FORGERY_REPORT);
-  const [showHeatmap, setShowHeatmap] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [currentRole, setCurrentRole] = useState<"customer" | "officer">("customer");
+  const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Seed documents incorporating multi-domain specs from AAA
+  const [documents, setDocuments] = useState<DocumentItem[]>([
+    {
+      id: "101",
+      domain: "hr_employment",
+      domainDisplay: DOMAIN_LABELS["hr_employment"],
+      docType: "resume",
+      docTypeDisplay: "Senior Engineer Resume",
+      fileName: "Alex_Taylor_Resume_2026.pdf",
+      fileExt: "pdf",
+      uploadDate: "2026-08-28 09:30:15",
+      status: "pending",
+      notes: "",
+      customerName: "Alex Taylor",
+      report: MOCK_FORGERY_REPORT,
+    },
+    {
+      id: "102",
+      domain: "billing_finance",
+      domainDisplay: DOMAIN_LABELS["billing_finance"],
+      docType: "utility_bill",
+      docTypeDisplay: "Electricity Bill Statement",
+      fileName: "Electricity_Bill_July_2026.pdf",
+      fileExt: "pdf",
+      uploadDate: "2026-08-28 09:45:00",
+      status: "pending",
+      notes: "",
+      customerName: "Alex Taylor",
+      report: MOCK_AUTHENTIC_REPORT,
+    },
+    {
+      id: "103",
+      domain: "identity_kyc",
+      domainDisplay: DOMAIN_LABELS["identity_kyc"],
+      docType: "passport",
+      docTypeDisplay: "Passport Identity Scan",
+      fileName: "Passport_Scan_Taylor.jpg",
+      fileExt: "jpg",
+      uploadDate: "2026-08-27 14:10:00",
+      status: "verified",
+      notes: "Passport identity details verified.",
+      customerName: "Alex Taylor",
+      report: MOCK_AUTHENTIC_REPORT,
+    },
+    {
+      id: "104",
+      domain: "education_academics",
+      domainDisplay: DOMAIN_LABELS["education_academics"],
+      docType: "degree_diploma",
+      docTypeDisplay: "Computer Science Degree",
+      fileName: "CS_Diploma_Scan.docx",
+      fileExt: "docx",
+      uploadDate: "2026-08-26 11:20:00",
+      status: "pending",
+      notes: "",
+      customerName: "Alex Taylor",
+      report: MOCK_FORGERY_REPORT,
+    },
+  ]);
 
-    setLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
+  // Seed audit logs
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([
+    {
+      id: "log-1",
+      timestamp: "2026-08-28 09:45:00",
+      docId: "102",
+      action: "submitted",
+      user: "Alex Taylor",
+      note: "Uploaded electricity bill statement for verification audit.",
+    },
+    {
+      id: "log-2",
+      timestamp: "2026-08-28 09:30:15",
+      docId: "101",
+      action: "submitted",
+      user: "Alex Taylor",
+      note: "Uploaded resume PDF for HR verification audit.",
+    },
+    {
+      id: "log-3",
+      timestamp: "2026-08-27 15:00:00",
+      docId: "103",
+      action: "verified",
+      user: "Verifier Sarah Jenkins",
+      note: "Passport scan verified intact without ELA tampering.",
+    },
+  ]);
 
+  const addToast = (message: string, type: ToastMessage["type"] = "info") => {
+    const newToast: ToastMessage = {
+      id: "toast-" + Date.now() + "-" + Math.random().toString(36).substring(2, 5),
+      message,
+      type,
+    };
+    setToasts((prev) => [...prev, newToast]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== newToast.id));
+    }, 4000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Submit new document callback
+  const handleSubmitDocument = async (
+    domain: DomainKey,
+    docType: string,
+    file: File
+  ) => {
+    const fileName = file.name;
+    const ext = fileName.includes(".") ? fileName.split(".").pop()!.toLowerCase() : "bin";
+    const docTypeObj = DOMAIN_CATEGORIES[domain]?.find((opt) => opt.val === docType);
+    const docTypeLabel = docTypeObj ? docTypeObj.label : docType;
+
+    let generatedReport: ForensicReport = MOCK_FORGERY_REPORT;
+
+    // Try backend API call if available
     try {
+      const formData = new FormData();
+      formData.append("file", file);
       const res = await fetch("http://localhost:8000/api/verify-document", {
         method: "POST",
         body: formData,
       });
       if (res.ok) {
-        const data = await res.json();
-        setReport(data);
+        generatedReport = await res.json();
       } else {
-        // Fallback to mock state if backend not running
-        setReport(file.name.includes("auth") ? MOCK_AUTHENTIC_REPORT : MOCK_FORGERY_REPORT);
+        generatedReport = fileName.toLowerCase().includes("auth")
+          ? MOCK_AUTHENTIC_REPORT
+          : MOCK_FORGERY_REPORT;
       }
     } catch {
-      setReport(file.name.includes("auth") ? MOCK_AUTHENTIC_REPORT : MOCK_FORGERY_REPORT);
-    } finally {
-      setLoading(false);
+      generatedReport = fileName.toLowerCase().includes("auth")
+        ? MOCK_AUTHENTIC_REPORT
+        : MOCK_FORGERY_REPORT;
     }
+
+    const newDocId = (105 + documents.length).toString();
+    const nowStr = new Date().toISOString().replace("T", " ").substring(0, 19);
+
+    const newDoc: DocumentItem = {
+      id: newDocId,
+      domain: domain,
+      domainDisplay: DOMAIN_LABELS[domain],
+      docType: docType,
+      docTypeDisplay: docTypeLabel,
+      fileName: fileName,
+      fileExt: ext,
+      fileSizeBytes: file.size,
+      uploadDate: nowStr,
+      status: "pending",
+      notes: "",
+      customerName: "Alex Taylor",
+      report: generatedReport,
+    };
+
+    setDocuments((prev) => [newDoc, ...prev]);
+
+    const newLog: AuditLogItem = {
+      id: "log-" + Date.now(),
+      timestamp: nowStr,
+      docId: newDocId,
+      action: "submitted",
+      user: "Alex Taylor",
+      note: `Submitted "${fileName}" (${DOMAIN_LABELS[domain]} - ${docTypeLabel}) for verification review.`,
+    };
+
+    setAuditLogs((prev) => [newLog, ...prev]);
+    addToast(`Document "${fileName}" successfully submitted for verification audit!`, "success");
   };
 
+  // Decision Callback from Reviewer View
+  const handleMakeDecision = (
+    docId: string,
+    decision: "verified" | "rejected" | "resubmit",
+    notes: string
+  ) => {
+    const nowStr = new Date().toISOString().replace("T", " ").substring(0, 19);
+
+    setDocuments((prev) =>
+      prev.map((doc) => {
+        if (doc.id === docId) {
+          return {
+            ...doc,
+            status: decision,
+            notes: notes || `Marked as ${decision} by Reviewer Officer.`,
+          };
+        }
+        return doc;
+      })
+    );
+
+    const actionText =
+      decision === "verified"
+        ? "Approve Verified"
+        : decision === "rejected"
+        ? "Reject Forgery"
+        : "Request Resubmission";
+
+    const newLog: AuditLogItem = {
+      id: "log-" + Date.now(),
+      timestamp: nowStr,
+      docId: docId,
+      action: decision,
+      user: "Verifier Officer",
+      note: `${actionText} for Document #${docId}. Note: ${notes || "No notes provided"}`,
+    };
+
+    setAuditLogs((prev) => [newLog, ...prev]);
+    addToast(
+      `Document #${docId} status updated to "${decision.toUpperCase()}".`,
+      decision === "verified" ? "success" : decision === "rejected" ? "danger" : "warning"
+    );
+  };
+
+  const handleInspectDocument = (docId: string) => {
+    setCurrentRole("officer");
+    addToast(`Switched to Reviewer View for Document #${docId}`, "info");
+  };
+
+  const pendingCount = documents.filter(
+    (d) => d.status === "pending" || d.status === "under_review"
+  ).length;
+
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-8">
-      {/* Header */}
-      <header className="flex justify-between items-center border-b border-slate-800 pb-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-black text-cyan-400">SherDetect</h1>
-          <p className="text-sm text-slate-400">Autonomous AI Document Forensic Engine</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className={`px-4 py-1 rounded-full text-xs font-bold ${report.isAuthentic ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse'}`}>
-            {report.verdict.replace("_", " ")}
-          </span>
-          <span className="text-xs font-mono text-slate-500">{report.processingTimeMs}ms</span>
-        </div>
-      </header>
+    <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950">
+      {/* Navigation Header */}
+      <Header
+        currentRole={currentRole}
+        onRoleChange={setCurrentRole}
+        pendingCount={pendingCount}
+      />
 
-      {/* Main Split-Screen Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left: Upload & Document Preview */}
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-slate-200 mb-4">Document Inspection Canvas</h2>
-            <div className="relative border-2 border-dashed border-slate-700 rounded-xl p-8 text-center bg-slate-950/50 hover:border-cyan-500 transition-colors">
-              <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*,.pdf" />
-              <p className="text-sm text-slate-300 font-medium">Drop document or invoice here to audit</p>
-              <p className="text-xs text-slate-500 mt-1">Accepts PNG, JPG, PDF (JPEG Re-compression Analysis)</p>
-            </div>
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8">
+        {/* Multi-Domain Banner */}
+        <DomainBanner
+          activeDomainFilter={domainFilter}
+          onSelectDomain={(domain) => setDomainFilter(domain)}
+        />
 
-            {/* Bounding Box Visual Area */}
-            <div className="mt-6 relative h-64 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center overflow-hidden">
-              {showHeatmap && report.tamperHeatmapBase64 ? (
-                <img src={report.tamperHeatmapBase64} alt="ELA Heatmap" className="w-full h-full object-contain" />
-              ) : (
-                <div className="text-center">
-                  <p className="text-sm text-slate-400 font-mono">Original Document View</p>
-                  <p className="text-xs text-slate-600 mt-1">{report.documentId}</p>
-                </div>
-              )}
+        {/* Dynamic Role Views */}
+        {currentRole === "customer" ? (
+          <SubmitterView
+            documents={documents}
+            onSubmitDocument={handleSubmitDocument}
+            onInspectDocument={handleInspectDocument}
+          />
+        ) : (
+          <ReviewerView
+            documents={documents}
+            auditLogs={auditLogs}
+            selectedDomainFilter={domainFilter}
+            onDomainFilterChange={setDomainFilter}
+            onMakeDecision={handleMakeDecision}
+          />
+        )}
+      </main>
 
-              {/* Render Detected Anomaly Bounding Boxes */}
-              {!showHeatmap && report.detectedAnomalies.map((box, idx) => (
-                <div
-                  key={idx}
-                  style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%` }}
-                  className="absolute border-2 border-red-500 bg-red-500/20 rounded pointer-events-none animate-pulse"
-                >
-                  <span className="absolute -top-5 left-0 bg-red-600 text-white text-[10px] px-1 py-0.5 rounded font-mono">
-                    {box.label} ({Math.round(box.confidence * 100)}%)
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button
-            onClick={() => setShowHeatmap(!showHeatmap)}
-            className="mt-6 w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 rounded-xl text-sm font-semibold transition-all"
-          >
-            {showHeatmap ? "Switch to Bounding Box View" : "Toggle ELA Compression Heatmap"}
-          </button>
-        </div>
-
-        {/* Right: Forensic Breakdown & Metrics */}
-        <div className="space-y-6">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-            <h2 className="text-lg font-bold text-slate-200 mb-4">Forensic Risk Score</h2>
-            <div className="flex items-center gap-6">
-              <div className="text-5xl font-black text-cyan-400 font-mono">
-                {report.fraudRiskScore}<span className="text-xl text-slate-500">/100</span>
-              </div>
-              <div className="flex-1 space-y-2">
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>Tamper Probability</span>
-                  <span>{report.fraudRiskScore}%</span>
-                </div>
-                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    style={{ width: `${report.fraudRiskScore}%` }}
-                    className={`h-full ${report.fraudRiskScore > 50 ? 'bg-red-500' : 'bg-emerald-500'}`}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-            <h2 className="text-lg font-bold text-slate-200">Multi-Layer Audit Summary</h2>
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                <p className="text-xs text-slate-500">Pixel ELA Score</p>
-                <p className="text-sm font-bold font-mono text-cyan-400">{report.forensicBreakdown.elaScore}</p>
-              </div>
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                <p className="text-xs text-slate-500">Metadata Tamper</p>
-                <p className={`text-sm font-bold ${report.forensicBreakdown.metadataTampered ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {report.forensicBreakdown.metadataTampered ? 'DETECTED' : 'CLEAR'}
-                </p>
-              </div>
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                <p className="text-xs text-slate-500">AI Semantic Check</p>
-                <p className={`text-sm font-bold ${report.forensicBreakdown.semanticDiscrepancy ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {report.forensicBreakdown.semanticDiscrepancy ? 'MISMATCH' : 'PASSED'}
-                </p>
-              </div>
-            </div>
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs text-slate-300 leading-relaxed">
-              <p className="font-semibold text-slate-200 mb-1">Forensic Investigator Narrative:</p>
-              {report.forensicSummary}
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
+      {/* Toast Notifications */}
+      <ToastOverlay toasts={toasts} onDismiss={removeToast} />
+    </div>
   );
 }
