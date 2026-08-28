@@ -139,15 +139,33 @@ export default function ForensicDashboard() {
 
     let generatedReport: ForensicReport = MOCK_FORGERY_REPORT;
 
-    // Try backend API call if available
+    // Try Backend API (port 8001, Supabase-backed) → AI Engine (port 8000) → Mock
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8001";
+    const aiEngineUrl = process.env.NEXT_PUBLIC_AI_ENGINE_URL || "http://localhost:8000";
+
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("http://localhost:8000/api/verify-document", {
+
+      // Primary: backend/app/main.py (port 8001) — full pipeline + Supabase persistence
+      let res = await fetch(`${backendUrl}/api/verify-document`, {
         method: "POST",
         body: formData,
-      });
-      if (res.ok) {
+        signal: AbortSignal.timeout(15000),
+      }).catch(() => null);
+
+      // Fallback: ai_engine/server.py (port 8000) — standalone AI engine
+      if (!res || !res.ok) {
+        const formData2 = new FormData();
+        formData2.append("file", file);
+        res = await fetch(`${aiEngineUrl}/api/verify-document`, {
+          method: "POST",
+          body: formData2,
+          signal: AbortSignal.timeout(15000),
+        }).catch(() => null);
+      }
+
+      if (res && res.ok) {
         generatedReport = await res.json();
       } else {
         generatedReport = fileName.toLowerCase().includes("auth")
