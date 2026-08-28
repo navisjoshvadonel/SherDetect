@@ -100,10 +100,16 @@ MAX_FILE_SIZE_MB = 50
 
 # ── Helper: Persist to Supabase ───────────────────────────────────────────────
 def _persist_to_supabase(report: ForensicReport, file_name: str) -> bool:
-    """Saves the forensic audit record to Supabase audit_reports table."""
+    """
+    Saves the forensic audit record to Supabase.
+    Writes to:
+      - audit_reports  : Full forensic result record
+      - audit_trail    : Immutable action log entry
+    """
     if not supabase_client:
         return False
     try:
+        # Write to audit_reports
         supabase_client.table("audit_reports").insert({
             "document_id": report.documentId,
             "file_name": file_name,
@@ -116,7 +122,18 @@ def _persist_to_supabase(report: ForensicReport, file_name: str) -> bool:
             "semantic_discrepancy": report.forensicBreakdown.semanticDiscrepancy,
             "forensic_summary": report.forensicSummary,
             "processing_time_ms": report.processingTimeMs,
+            "anomaly_count": len(report.detectedAnomalies),
         }).execute()
+
+        # Write to audit_trail (immutable event log)
+        action = "verified" if report.isAuthentic else "rejected"
+        supabase_client.table("audit_trail").insert({
+            "doc_id": report.documentId,
+            "action": action,
+            "actor": "SherDetect AI Engine",
+            "note": f"{report.verdict} | Risk Score: {report.fraudRiskScore}% | {report.forensicSummary[:120]}",
+        }).execute()
+
         return True
     except Exception as e:
         print(f"[SherDetect] Supabase write failed: {e}")
