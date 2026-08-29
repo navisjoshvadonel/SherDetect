@@ -268,13 +268,15 @@ async def validate_document_semantics(
       signatory, branding, course facts, and verification path.
     - A pristine PDF can be forged. A typo, wrong signatory, generic seal, missing
       authorized platform, or invalid credential path is a serious red flag.
+    - IF the image contains AI generation artifacts (e.g., hallucinated/garbled background text, nonsensical objects, distorted logos, or AI watermarks like a 4-pointed star in the corner), it is a FORGERY. AI-generated certificates are ALWAYS fakes.
 
     Audit in this order:
     1. Check every extracted word for spelling and phrasing errors.
-    2. Check signatory authority against the issuing division.
-    3. Check official partnership/platform branding and logo anomalies.
-    4. Check credential IDs and direct verification URLs.
-    5. Check mathematical parity, dates, and absurd figures where applicable.
+    2. Check for AI generation artifacts (hallucinated text in backgrounds, weird logos, watermarks).
+    3. Check signatory authority against the issuing division.
+    4. Check official partnership/platform branding and logo anomalies.
+    5. Check credential IDs and direct verification URLs.
+    6. Check mathematical parity, dates, and absurd figures where applicable.
 
 Document Content:
 \"\"\"
@@ -285,14 +287,18 @@ Respond ONLY with a valid JSON object matching this schema:
 {{
     "file_format_observed": "clean PDF or noisy JPG",
     "format_bias_mitigation": "Explain that file quality was ignored",
-    "text_content_analysis": "List typos, signatory, branding, and factual findings",
+    "text_content_analysis": "List typos, AI artifacts, signatory, branding, and factual findings",
     "final_classification": "Genuine or Forgery",
     "confidence_score": 0.0,
   "semanticDiscrepancy": false,
   "detectedAnomalies": [
     {{
-      "type": "MATH_MISMATCH",
-      "description": "Specific discrepancy explanation"
+      "type": "AI_ARTIFACT",
+      "description": "Specific discrepancy explanation",
+      "x": 85.0,
+      "y": 90.0,
+      "width": 10.0,
+      "height": 10.0
     }}
   ],
   "forensicSummary": "Concise forensic summary of findings"

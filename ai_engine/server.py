@@ -96,13 +96,28 @@ async def verify_document(file: UploadFile = File(...)):
         contents = b"".join(byte_chunks)
         file_name = file.filename or "uploaded_document.pdf"
         doc_id = f"DOC-{int(time.time()) % 10000:04d}"
+        
+        # 0. Convert PDF to Image for visual analysis (if applicable)
+        image_contents = contents
+        converted_image_base64 = None
+        if file.content_type == "application/pdf" or file_name.lower().endswith(".pdf"):
+            try:
+                import fitz
+                import base64
+                doc = fitz.open(stream=contents, filetype="pdf")
+                page = doc.load_page(0)
+                pix = page.get_pixmap(dpi=150)
+                image_contents = pix.tobytes("png")
+                converted_image_base64 = f"data:image/png;base64,{base64.b64encode(image_contents).decode()}"
+            except Exception as e:
+                print(f"Failed to convert PDF to image: {e}")
 
         # 1. Binary Stream & EXIF Metadata Tamper Scan
         metadata_res = MetadataScanner.scan_bytes(contents)
 
         # 2. ELA & Anomaly Bounding Box Detection
         try:
-            ela_score, heatmap_base64, anomalies = compute_ela_and_anomalies(contents)
+            ela_score, heatmap_base64, anomalies = compute_ela_and_anomalies(image_contents)
         except Exception:
             # ELA is image-only. Do not invent a score or anomaly for PDFs.
             ela_score = 0.0
@@ -110,7 +125,7 @@ async def verify_document(file: UploadFile = File(...)):
             heatmap_base64 = None
 
         # 3. Laplacian Variance Edge Sharpness Inconsistency Inspection
-        sharpness_res = SharpnessInspector.analyze_sharpness_inconsistency(contents)
+        sharpness_res = SharpnessInspector.analyze_sharpness_inconsistency(image_contents)
         if sharpness_res["hasSharpnessAnomaly"]:
             anomalies.extend(sharpness_res["detectedAnomalies"])
 
@@ -127,8 +142,8 @@ async def verify_document(file: UploadFile = File(...)):
         # 6. Gemini AI Semantic Validation
         ai_res = await validate_document_semantics(
             sanitized_text,
-            file.content_type or "unknown",
-            contents,
+            "image/png" if converted_image_base64 else (file.content_type or "unknown"),
+            image_contents,
         )
 
         processing_time_ms = int((time.time() - start_time) * 1000)
@@ -150,6 +165,9 @@ async def verify_document(file: UploadFile = File(...)):
             sharpness_result=sharpness_res,
             processing_time_ms=processing_time_ms
         )
+        
+        if converted_image_base64:
+            report["previewUrl"] = converted_image_base64
 
         return report
     except Exception as e:

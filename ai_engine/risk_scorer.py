@@ -118,8 +118,8 @@ class RiskScorer:
         if has_deterministic_semantic_failure:
             raw_risk = max(raw_risk, 65.0)
 
-        # Content-based typo/template/signatory findings are strong forgery signals.
-        content_anomaly_types = {"CONTENT_TYPO", "TEMPLATE_MARKER", "SIGNATORY_IMPLAUSIBILITY"}
+        # Content-based typo/template/signatory/AI-generation findings are strong forgery signals.
+        content_anomaly_types = {"CONTENT_TYPO", "TEMPLATE_MARKER", "SIGNATORY_IMPLAUSIBILITY", "AI_ARTIFACT", "VISUAL_ANOMALY"}
         has_content_forgery_signal = any(
             anomaly.get("type") in content_anomaly_types
             for anomaly in semantic_result.get("detectedAnomalies", [])
