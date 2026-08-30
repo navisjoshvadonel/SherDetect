@@ -6,9 +6,6 @@ Tests endpoint contracts, file size guards, content type validation, and forensi
 """
 
 import os
-os.environ["REDIS_URL"] = "memory://"
-os.environ["CELERY_RESULT_BACKEND"] = "cache+memory://"
-
 import sys
 import io
 import pytest
@@ -145,7 +142,8 @@ def test_pdf_content_mismatch_is_detected_without_forged_filename():
     page = pdf.new_page()
     page.insert_text((72, 72), "Invoice\nSubtotal: $200.00\nTax: $20.00\nTotal: $9500.00")
 
-    response = TestClient(app).post(
+    client = TestClient(app)
+    response = client.post(
         "/api/verify-document",
         files={"file": ("customer_upload.pdf", io.BytesIO(pdf.tobytes()), "application/pdf")},
     )
