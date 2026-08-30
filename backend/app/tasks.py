@@ -2,6 +2,7 @@ import os
 import json
 import time
 import requests
+import base64
 from celery import shared_task
 from contracts.api_spec import ForensicReport
 from backend.app.logger import setup_logger
@@ -48,8 +49,32 @@ def process_document_task(self, job_id: str, file_path: str, file_name: str, con
         report_data = response.json()
         report = ForensicReport(**report_data)
 
-        # 3. Persist to Supabase
+        # 3. Persist to Supabase Storage & Database
         if supabase_client:
+            storage_path = f"{job_id}/{file_name}"
+            heatmap_path = f"{job_id}/ela_heatmap.png"
+            
+            try:
+                # Attempt to upload original evidence
+                supabase_client.storage.from_("evidence").upload(
+                    path=storage_path,
+                    file=contents,
+                    file_options={"content-type": content_type}
+                )
+                logger.info(f"Uploaded evidence to storage: {storage_path}")
+                
+                # Attempt to upload ELA heatmap if generated
+                if report.tamperHeatmapBase64:
+                    heatmap_bytes = base64.b64decode(report.tamperHeatmapBase64)
+                    supabase_client.storage.from_("heatmaps").upload(
+                        path=heatmap_path,
+                        file=heatmap_bytes,
+                        file_options={"content-type": "image/png"}
+                    )
+                    logger.info(f"Uploaded heatmap to storage: {heatmap_path}")
+            except Exception as storage_err:
+                logger.warning(f"Storage upload failed (buckets might not exist or RLS blocked): {storage_err}")
+
             try:
                 supabase_client.table("audit_reports").insert({
                     "document_id": report.documentId,
