@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { ForensicReport } from "@/contracts/api-spec";
+import { ExportAffidavitButton } from "./ExportAffidavitButton";
 
 interface ForensicCanvasProps {
   report?: ForensicReport;
@@ -268,6 +269,11 @@ export const ForensicCanvas: React.FC<ForensicCanvasProps> = ({
             Forensic Investigator Narrative:
           </p>
           <p className="text-[10.5px]">{report.forensicSummary}</p>
+        </div>
+        
+        {/* Generate PDF Affidavit Button */}
+        <div className="pt-2 border-t-2 border-brutal-black mt-3">
+          <ExportAffidavitButton report={report} />
         </div>
       </div>
     </div>
