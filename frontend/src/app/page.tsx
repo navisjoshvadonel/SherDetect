@@ -228,7 +228,7 @@ export default function ForensicDashboard() {
   };
 
   // Decision Callback from Reviewer View
-  const handleMakeDecision = (
+  const handleMakeDecision = async (
     docId: string,
     decision: "verified" | "rejected" | "resubmit",
     notes: string
@@ -269,6 +269,22 @@ export default function ForensicDashboard() {
       `Document #${docId} status updated to "${decision.toUpperCase()}".`,
       decision === "verified" ? "success" : decision === "rejected" ? "danger" : "warning"
     );
+
+    // Sync decision to Python Backend / Supabase
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8001";
+    try {
+      await fetch(`${backendUrl}/api/documents/${docId}/decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision: decision,
+          notes: notes,
+          reviewerName: "Verifier Officer",
+        }),
+      }).catch(() => null);
+    } catch (e) {
+      // Graceful local sync fallback
+    }
   };
 
   const handleInspectDocument = (docId: string) => {

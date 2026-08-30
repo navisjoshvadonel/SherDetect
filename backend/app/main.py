@@ -31,6 +31,8 @@ import sys
 import os
 import time
 import uuid
+import hashlib
+import httpx
 from typing import Optional
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
@@ -44,15 +46,7 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from ai_engine.ela_engine import compute_ela_and_anomalies
-from ai_engine.ai_validator import validate_document_semantics
-from ai_engine.benford_inspector import BenfordInspector
-from ai_engine.checksum_validator import ChecksumValidator
-from ai_engine.metadata_scanner import MetadataScanner
-from ai_engine.sharpness_inspector import SharpnessInspector
-from ai_engine.pii_sanitizer import PIISanitizer
-from ai_engine.document_text import extract_document_text
-from ai_engine.risk_scorer import RiskScorer
+from pydantic import BaseModel, Field
 from contracts.api_spec import (
     ForensicReport, ForensicBreakdown, AnomalyBoundingBox
 )
@@ -107,7 +101,7 @@ MAX_FILE_SIZE_MB = 50
 
 
 # ── Helper: Persist to Supabase ───────────────────────────────────────────────
-def _persist_to_supabase(report: ForensicReport, file_name: str) -> bool:
+def _persist_to_supabase(report: ForensicReport, file_name: str, file_hash: str) -> bool:
     """
     Saves the forensic audit record to Supabase.
     Writes to:
@@ -131,6 +125,8 @@ def _persist_to_supabase(report: ForensicReport, file_name: str) -> bool:
             "forensic_summary": report.forensicSummary,
             "processing_time_ms": report.processingTimeMs,
             "anomaly_count": len(report.detectedAnomalies),
+            "file_hash": file_hash,
+            "full_report_json": report.model_dump(mode="json") if hasattr(report, "model_dump") else report.dict(),
         }).execute()
 
         # Write to audit_trail (immutable event log)
@@ -210,97 +206,35 @@ async def verify_document(file: UploadFile = File(...)):
 
     contents = b"".join(byte_chunks)
     file_name = file.filename or "uploaded_document.bin"
-    doc_id = f"DOC-{uuid.uuid4().hex[:8].upper()}"
+    
+    # ── Phase 1.2: File Hashing & Deduplication (Caching) ───────────────
+    file_hash = hashlib.sha256(contents).hexdigest()
+
+    if supabase_client:
+        try:
+            cached = supabase_client.table("audit_reports").select("full_report_json").eq("file_hash", file_hash).limit(1).execute()
+            if cached.data and cached.data[0].get("full_report_json"):
+                print(f"[SherDetect] Cache hit for {file_name} ({file_hash})")
+                return ForensicReport(**cached.data[0]["full_report_json"])
+        except Exception as e:
+            print(f"[SherDetect] Cache check failed: {e}")
 
     try:
-        # ── Layer 1: Binary EXIF Metadata Scanner ─────────────────────────────
-        metadata_res = MetadataScanner.scan_bytes(contents)
-
-        # ── Layer 2: ELA Pixel Forensics ──────────────────────────────────────
-        try:
-            ela_score, heatmap_b64, raw_anomalies = compute_ela_and_anomalies(contents)
-        except Exception:
-            # ELA is image-only. Do not invent a score or anomaly for PDFs.
-            ela_score = 0.0
-            raw_anomalies = []
-            heatmap_b64 = None
-
-        # ── Layer 3: Laplacian Sharpness Inconsistency ────────────────────────
-        sharpness_res = SharpnessInspector.analyze_sharpness_inconsistency(contents)
-        if sharpness_res["hasSharpnessAnomaly"]:
-            raw_anomalies.extend(sharpness_res["detectedAnomalies"])
-
-        # Map raw dicts → typed Pydantic models
-        detected_anomalies = [
-            AnomalyBoundingBox(
-                x=a["x"], y=a["y"],
-                width=a["width"], height=a["height"],
-                label=a.get("label", "Pixel Anomaly"),
-                confidence=a.get("confidence", 0.90),
-            )
-            for a in raw_anomalies
-        ]
-
-        # ── Layer 4: Extract document text, then sanitize before numeric/LLM checks
-        extracted_text = extract_document_text(contents, file.content_type)
-        if not extracted_text:
-            extracted_text = "No machine-readable document text was available for semantic audit."
-        sanitized_text, _ = PIISanitizer.sanitize(extracted_text)
-        benford_res = BenfordInspector.analyze_benford(sanitized_text)
-
-        # ── Layer 5: Cryptographic Checksum (Verhoeff + Luhn) ─────────────────
-        checksum_res = ChecksumValidator.audit_document_ids(sanitized_text)
-
-        # ── Layer 6: Gemini AI Semantic Audit ─────────────────────────────────
-        ai_res = await validate_document_semantics(
-            sanitized_text,
-            file.content_type or "unknown",
-            contents,
-        )
-
-        processing_time_ms = int((time.time() - start_time) * 1000)
-
-        # ── Determine software fingerprint ────────────────────────────────────
-        detected_software = metadata_res.get("detectedSoftware")
-        is_metadata_tampered = (
-            metadata_res["isMetadataTampered"]
-            or checksum_res["hasChecksumAnomaly"]
-        )
-
-        # ── Multi-Vector Risk Fusion ───────────────────────────────────────────
-        report_dict = RiskScorer.aggregate_forensic_report(
-            document_id=doc_id,
-            ela_score=ela_score,
-            pixel_anomalies=[a.model_dump() for a in detected_anomalies],
-            heatmap_b64=heatmap_b64,
-            semantic_result=ai_res,
-            benford_result=benford_res,
-            metadata_tampered=is_metadata_tampered,
-            software_detected=detected_software,
-            sharpness_result=sharpness_res,
-            processing_time_ms=processing_time_ms,
-        )
-
-        # ── Build strictly typed ForensicReport ───────────────────────────────
-        report = ForensicReport(
-            documentId=report_dict["documentId"],
-            isAuthentic=report_dict["isAuthentic"],
-            fraudRiskScore=report_dict["fraudRiskScore"],
-            verdict=report_dict["verdict"],
-            forensicBreakdown=ForensicBreakdown(
-                elaScore=report_dict["forensicBreakdown"]["elaScore"],
-                metadataTampered=report_dict["forensicBreakdown"]["metadataTampered"],
-                softwareFingerprintDetected=report_dict["forensicBreakdown"]["softwareFingerprintDetected"],
-                semanticDiscrepancy=report_dict["forensicBreakdown"]["semanticDiscrepancy"],
-            ),
-            detectedAnomalies=detected_anomalies,
-            tamperHeatmapBase64=report_dict.get("tamperHeatmapBase64"),
-            forensicSummary=report_dict["forensicSummary"],
-            processingTimeMs=report_dict["processingTimeMs"],
-        )
+        # ── Phase 1.1: Forward to AI Engine Microservice ─────────────────
+        ai_engine_url = os.getenv("AI_ENGINE_URL", "http://localhost:8000/api/verify-document")
+        
+        async with httpx.AsyncClient() as client:
+            files_payload = {"file": (file_name, contents, file.content_type or "application/octet-stream")}
+            response = await client.post(ai_engine_url, files=files_payload, timeout=120.0)
+            
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=f"AI Engine failed: {response.text}")
+            
+        report_data = response.json()
+        report = ForensicReport(**report_data)
 
         # ── Persist to Supabase ────────────────────────────────────────────────
-        _persist_to_supabase(report, file_name)
+        _persist_to_supabase(report, file_name, file_hash)
 
         return report
 
@@ -308,6 +242,12 @@ async def verify_document(file: UploadFile = File(...)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Forensic analysis failed: {str(e)}")
+
+
+class DecisionRequest(BaseModel):
+    decision: str = Field(..., description="verified | rejected | resubmit")
+    notes: Optional[str] = ""
+    reviewerName: Optional[str] = "Verifier Officer"
 
 
 @app.get("/api/audit-history")
@@ -333,6 +273,35 @@ def get_audit_history(
     except Exception as e:
         print(f"[SherDetect] Supabase audit fetch offline/unreachable: {e}")
         return {"records": [], "supabase": "offline", "error": str(e)}
+
+
+@app.post("/api/documents/{doc_id}/decision")
+def record_decision(doc_id: str, payload: DecisionRequest):
+    """
+    Records a reviewer officer verification decision in Supabase/audit trail.
+    """
+    action = payload.decision
+    note = payload.notes or f"Marked as {payload.decision} by {payload.reviewerName}"
+
+    if supabase_client:
+        try:
+            supabase_client.table("audit_trail").insert({
+                "doc_id": doc_id,
+                "action": action,
+                "actor": payload.reviewerName,
+                "note": note,
+            }).execute()
+        except Exception as e:
+            print(f"[SherDetect] Supabase decision log error: {e}")
+
+    return {
+        "status": "success",
+        "doc_id": doc_id,
+        "decision": action,
+        "reviewer": payload.reviewerName,
+        "note": note,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
 
 
 if __name__ == "__main__":
