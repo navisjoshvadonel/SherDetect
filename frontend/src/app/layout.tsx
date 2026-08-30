@@ -20,7 +20,7 @@ export default function RootLayout({
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
         />
       </head>
-      <body className="min-h-screen flex flex-col antialiased selection:bg-brutal-yellow selection:text-brutal-black bg-brutal-bg">
+      <body className="min-h-screen flex flex-col antialiased selection:bg-brutal-yellow selection:text-brutal-black bg-brutal-bg text-brutal-black">
         {children}
       </body>
     </html>

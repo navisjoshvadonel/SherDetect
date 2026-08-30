@@ -6,6 +6,7 @@ import { DomainBanner } from "./components/DomainBanner";
 import { SubmitterView } from "./components/SubmitterView";
 import { ReviewerView } from "./components/ReviewerView";
 import { ToastOverlay } from "./components/ToastOverlay";
+import { GeminiChatBot } from "./components/GeminiChatBot";
 import {
   DomainKey,
   DocumentItem,
@@ -375,6 +376,12 @@ export default function ForensicDashboard() {
 
       {/* Toast Notifications */}
       <ToastOverlay toasts={toasts} onDismiss={removeToast} />
+
+      {/* Interactive Gemini AI Forensic Multi-Turn Chatbot */}
+      <GeminiChatBot
+        documents={documents}
+        activeDocument={documents.find((d) => d.status === "pending") || documents[0]}
+      />
     </div>
   );
 }
