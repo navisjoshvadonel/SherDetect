@@ -100,6 +100,10 @@ async def verify_document(file: UploadFile = File(...)):
         file_name = file.filename or "uploaded_document.pdf"
         doc_id = f"DOC-{int(time.time()) % 10000:04d}"
         
+        # Calculate SHA-256 Cryptographic Hash (Immutable Audit Trail)
+        import hashlib
+        file_hash = hashlib.sha256(contents).hexdigest()
+        
         # 0. Convert PDF to Image for visual analysis (if applicable)
         image_contents = contents
         converted_image_base64 = None
@@ -166,7 +170,8 @@ async def verify_document(file: UploadFile = File(...)):
             metadata_tampered=is_metadata_tampered,
             software_detected=detected_software,
             sharpness_result=sharpness_res,
-            processing_time_ms=processing_time_ms
+            processing_time_ms=processing_time_ms,
+            file_hash=file_hash
         )
         
         if converted_image_base64:

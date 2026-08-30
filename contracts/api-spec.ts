@@ -18,6 +18,7 @@ export interface ForensicBreakdown {
 
 export interface ForensicReport {
   documentId: string;
+  fileHash?: string;
   isAuthentic: boolean;
   fraudRiskScore: number; // 0 (Safe) to 100 (Critical Fraud)
   verdict: "VERIFIED_AUTHENTIC" | "SUSPICIOUS" | "FORGERY_DETECTED";

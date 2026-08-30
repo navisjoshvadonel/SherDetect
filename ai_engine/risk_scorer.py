@@ -57,7 +57,8 @@ class RiskScorer:
         metadata_tampered: bool = False,
         software_detected: Optional[str] = None,
         sharpness_result: Optional[Dict[str, Any]] = None,
-        processing_time_ms: int = 0
+        processing_time_ms: int = 0,
+        file_hash: str = "UNAVAILABLE"
     ) -> Dict[str, Any]:
         """
         Builds a comprehensive ForensicReport payload adhering to contracts/api_spec.py
@@ -181,6 +182,7 @@ class RiskScorer:
 
         return {
             "documentId": document_id,
+            "fileHash": file_hash,
             "isAuthentic": not is_forged,
             "fraudRiskScore": fraud_risk_score,
             "verdict": verdict,

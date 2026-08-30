@@ -251,6 +251,18 @@ export const ForensicCanvas: React.FC<ForensicCanvasProps> = ({
           </div>
         )}
 
+        {report.fileHash && (
+          <div className="p-1.5 bg-brutal-bg border border-brutal-black rounded-lg flex flex-col justify-center text-[10px] shadow-brutal-sm gap-0.5">
+            <span className="text-brutal-black font-black uppercase text-[8.5px] flex items-center gap-1">
+              <i className="fa-solid fa-fingerprint text-brutal-purple"></i>
+              Immutable File Hash (SHA-256)
+            </span>
+            <span className="font-mono text-brutal-black font-extrabold text-[9px] break-all">
+              {report.fileHash}
+            </span>
+          </div>
+        )}
+
         <div className="p-2 bg-brutal-yellow/30 border-2 border-brutal-black rounded-lg text-[11px] text-brutal-black font-bold leading-relaxed space-y-0.5 shadow-brutal-sm">
           <p className="font-black uppercase text-[9.5px] tracking-wider text-brutal-black">
             Forensic Investigator Narrative:
