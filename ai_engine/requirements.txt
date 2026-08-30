@@ -8,3 +8,6 @@ pytest>=7.0.0
 pytest-asyncio>=0.21.0
 PyMuPDF>=1.23.0
 pytesseract>=0.3.10
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.6
