@@ -15,6 +15,9 @@ from ai_engine.pii_sanitizer import PIISanitizer
 from ai_engine.risk_scorer import RiskScorer
 from ai_engine.sample_generator import SampleGenerator
 from ai_engine.document_text import extract_document_text
+from ai_engine.logger import setup_logger
+
+logger = setup_logger("SherDetect.AIEngine")
 
 app = FastAPI(
     title="SherDetect AI Forensic Engine API",
@@ -110,7 +113,7 @@ async def verify_document(file: UploadFile = File(...)):
                 image_contents = pix.tobytes("png")
                 converted_image_base64 = f"data:image/png;base64,{base64.b64encode(image_contents).decode()}"
             except Exception as e:
-                print(f"Failed to convert PDF to image: {e}")
+                logger.error(f"Failed to convert PDF to image: {e}")
 
         # 1. Binary Stream & EXIF Metadata Tamper Scan
         metadata_res = MetadataScanner.scan_bytes(contents)

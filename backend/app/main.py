@@ -50,6 +50,9 @@ from pydantic import BaseModel, Field
 from contracts.api_spec import (
     ForensicReport, ForensicBreakdown, AnomalyBoundingBox
 )
+from app.logger import setup_logger
+
+logger = setup_logger("SherDetect.Main")
 
 # ── Supabase Client (graceful fallback if not configured) ─────────────────────
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
@@ -60,11 +63,11 @@ if SUPABASE_URL and SUPABASE_ANON_KEY:
     try:
         from supabase import create_client
         supabase_client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-        print("[SherDetect] [OK] Supabase connected.")
+        logger.info("Supabase connected.")
     except Exception as e:
-        print(f"[SherDetect] [WARN] Supabase init failed (offline mode): {e}")
+        logger.warning(f"Supabase init failed (offline mode): {e}")
 else:
-    print("[SherDetect] [INFO] Supabase not configured - audit persistence disabled.")
+    logger.info("Supabase not configured - audit persistence disabled.")
 
 # ── FastAPI Application ───────────────────────────────────────────────────────
 app = FastAPI(
@@ -140,7 +143,7 @@ def _persist_to_supabase(report: ForensicReport, file_name: str, file_hash: str)
 
         return True
     except Exception as e:
-        print(f"[SherDetect] Supabase write failed: {e}")
+        logger.error(f"Supabase write failed: {e}")
         return False
 
 
@@ -214,10 +217,10 @@ async def verify_document(file: UploadFile = File(...)):
         try:
             cached = supabase_client.table("audit_reports").select("full_report_json").eq("file_hash", file_hash).limit(1).execute()
             if cached.data and cached.data[0].get("full_report_json"):
-                print(f"[SherDetect] Cache hit for {file_name} ({file_hash})")
+                logger.info(f"Cache hit for {file_name} ({file_hash})")
                 return ForensicReport(**cached.data[0]["full_report_json"])
         except Exception as e:
-            print(f"[SherDetect] Cache check failed: {e}")
+            logger.warning(f"Cache check failed: {e}")
 
     try:
         # ── Phase 1.1: Forward to AI Engine Microservice ─────────────────
@@ -271,7 +274,7 @@ def get_audit_history(
         result = query.execute()
         return {"records": result.data, "total": len(result.data)}
     except Exception as e:
-        print(f"[SherDetect] Supabase audit fetch offline/unreachable: {e}")
+        logger.error(f"Supabase audit fetch offline/unreachable: {e}")
         return {"records": [], "supabase": "offline", "error": str(e)}
 
 
@@ -292,7 +295,7 @@ def record_decision(doc_id: str, payload: DecisionRequest):
                 "note": note,
             }).execute()
         except Exception as e:
-            print(f"[SherDetect] Supabase decision log error: {e}")
+            logger.error(f"Supabase decision log error: {e}")
 
     return {
         "status": "success",

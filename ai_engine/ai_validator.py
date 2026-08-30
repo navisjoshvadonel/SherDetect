@@ -17,6 +17,9 @@ from dotenv import load_dotenv
 
 from ai_engine.pii_sanitizer import PIISanitizer
 from ai_engine.checksum_validator import ChecksumValidator
+from ai_engine.logger import setup_logger
+
+logger = setup_logger("SherDetect.AIValidator")
 
 load_dotenv()
 
@@ -27,7 +30,7 @@ if api_key:
     try:
         _genai_client = genai.Client(api_key=api_key)
     except Exception as err:
-        print(f"[SherDetect AI] Gemini client setup notice: {err}")
+        logger.error(f"Gemini client setup notice: {err}")
 
 
 # ---------------------------------------------------------------------------
