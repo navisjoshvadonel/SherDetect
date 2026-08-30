@@ -6,6 +6,9 @@ Tests endpoint contracts, file size guards, content type validation, and forensi
 """
 
 import os
+os.environ["REDIS_URL"] = "memory://"
+os.environ["CELERY_RESULT_BACKEND"] = "cache+memory://"
+
 import sys
 import io
 import pytest
@@ -18,20 +21,30 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+from unittest.mock import patch, MagicMock
+import asyncio
+
+from backend.app.celery_app import celery_app
+celery_app.conf.update(
+    task_always_eager=True, 
+    task_eager_propagates=True,
+    broker_url="memory://",
+    result_backend="cache+memory://"
+)
+
 from backend.app.main import app
 from backend.app.auth import require_officer_role
 from ai_engine.sample_generator import SampleGenerator
-from unittest.mock import patch, AsyncMock, MagicMock
 
 def mock_get_current_user():
     return {"sub": "test-user-id", "app_metadata": {"role": "officer"}}
 
 app.dependency_overrides[require_officer_role] = mock_get_current_user
 
-# Pytest fixture to mock the decoupled AI Engine microservice call
+# Pytest fixture to mock the decoupled AI Engine microservice call (now synchronous in Celery worker)
 @pytest.fixture(autouse=True)
 def mock_httpx_post():
-    async def side_effect_post(*args, **kwargs):
+    def side_effect_post(*args, **kwargs):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         
@@ -60,8 +73,13 @@ def mock_httpx_post():
         }
         return mock_resp
 
-    with patch("httpx.AsyncClient.post", side_effect=side_effect_post) as mock_post:
-        yield mock_post
+    async def async_side_effect_post(*args, **kwargs):
+        return side_effect_post(*args, **kwargs)
+
+    with patch("requests.post", side_effect=side_effect_post) as mock_post:
+        with patch("backend.app.main.supabase_client", None):
+            with patch("backend.app.tasks.supabase_client", None):
+                yield mock_post
 
 
 def test_health_endpoint():
@@ -89,7 +107,13 @@ def test_verify_document_authentic_png():
     response = client.post("/api/verify-document", files=files)
 
     assert response.status_code == 200
-    report = response.json()
+    job_data = response.json()
+    assert "job_id" in job_data
+    
+    # Since task is eager, it is already SUCCESS
+    status_response = client.get(f"/api/documents/status/{job_data['job_id']}")
+    report = status_response.json().get("report")
+    
     assert "documentId" in report
     assert "isAuthentic" in report
     assert "fraudRiskScore" in report
@@ -110,7 +134,9 @@ def test_neutral_filename_clean_jpg_is_not_forced_to_forgery():
     )
 
     assert response.status_code == 200
-    assert response.json()["verdict"] in ["VERIFIED_AUTHENTIC", "SUSPICIOUS"]
+    job_id = response.json()["job_id"]
+    report = client.get(f"/api/documents/status/{job_id}").json()["report"]
+    assert report["verdict"] in ["VERIFIED_AUTHENTIC", "SUSPICIOUS"]
 
 
 def test_pdf_content_mismatch_is_detected_without_forged_filename():
@@ -125,7 +151,8 @@ def test_pdf_content_mismatch_is_detected_without_forged_filename():
     )
 
     assert response.status_code == 200
-    report = response.json()
+    job_id = response.json()["job_id"]
+    report = client.get(f"/api/documents/status/{job_id}").json()["report"]
     assert report["forensicBreakdown"]["semanticDiscrepancy"] is True
     assert report["verdict"] == "FORGERY_DETECTED"
 
@@ -146,8 +173,13 @@ def test_pixel_evidence_changes_risk_for_spliced_jpg():
 
     assert clean_response.status_code == 200
     assert spliced_response.status_code == 200
-    clean_report = clean_response.json()
-    spliced_report = spliced_response.json()
+    
+    clean_job = clean_response.json()["job_id"]
+    spliced_job = spliced_response.json()["job_id"]
+    
+    clean_report = client.get(f"/api/documents/status/{clean_job}").json()["report"]
+    spliced_report = client.get(f"/api/documents/status/{spliced_job}").json()["report"]
+    
     assert spliced_report["fraudRiskScore"] > clean_report["fraudRiskScore"]
     assert spliced_report["verdict"] == "FORGERY_DETECTED"
 

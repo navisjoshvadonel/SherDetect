@@ -180,10 +180,43 @@ export default function ForensicDashboard() {
       }
 
       if (res && res.ok) {
-        generatedReport = await res.json();
+        const data = await res.json();
+        if (data.job_id && data.status === "processing") {
+          addToast("Document uploaded. AI processing in background...", "info");
+          
+          // Poll for completion
+          const maxRetries = 60; // 2 minutes max
+          let retries = 0;
+          
+          while (retries < maxRetries) {
+            await new Promise((r) => setTimeout(r, 2000));
+            const pollRes = await fetch(`${backendUrl}/api/documents/status/${data.job_id}`);
+            if (pollRes.ok) {
+              const pollData = await pollRes.json();
+              if (pollData.status === "completed") {
+                generatedReport = pollData.report;
+                break;
+              } else if (pollData.status === "failed") {
+                addToast(`Verification Error: ${pollData.error}`, "danger");
+                return;
+              }
+            }
+            retries++;
+          }
+          if (!generatedReport) {
+            addToast("Verification Error: Background job timed out.", "danger");
+            return;
+          }
+        } else if (data.report) {
+          // Cache hit or synchronous fallback
+          generatedReport = data.report;
+        } else {
+          // Legacy synchronous format
+          generatedReport = data;
+        }
       } else {
         const errJson = res ? await res.json().catch(() => null) : null;
-        const msg = errJson?.error || "SherDetect Python backend service is offline. Please start Python backend on port 8001.";
+        const msg = errJson?.error || errJson?.detail || "SherDetect Python backend service is offline.";
         addToast(`Verification Error: ${msg}`, "danger");
         return;
       }

@@ -52,6 +52,8 @@ from contracts.api_spec import (
 )
 from backend.app.logger import setup_logger
 from backend.app.auth import get_current_user, require_officer_role
+from backend.app.celery_app import celery_app
+from backend.app.tasks import process_document_task
 
 logger = setup_logger("SherDetect.Main")
 
@@ -107,15 +109,11 @@ MAX_FILE_SIZE_MB = 50
 # ── Helper: Persist to Supabase ───────────────────────────────────────────────
 def _persist_to_supabase(report: ForensicReport, file_name: str, file_hash: str) -> bool:
     """
-    Saves the forensic audit record to Supabase.
-    Writes to:
-      - audit_reports  : Full forensic result record
-      - audit_trail    : Immutable action log entry
+    Legacy sync persist method (kept for cache hits or fallback).
     """
     if not supabase_client:
         return False
     try:
-        # Write to audit_reports
         supabase_client.table("audit_reports").insert({
             "document_id": report.documentId,
             "file_name": file_name,
@@ -133,7 +131,6 @@ def _persist_to_supabase(report: ForensicReport, file_name: str, file_hash: str)
             "full_report_json": report.model_dump(mode="json") if hasattr(report, "model_dump") else report.dict(),
         }).execute()
 
-        # Write to audit_trail (immutable event log)
         action = "verified" if report.isAuthentic else "rejected"
         supabase_client.table("audit_trail").insert({
             "doc_id": report.documentId,
@@ -141,7 +138,6 @@ def _persist_to_supabase(report: ForensicReport, file_name: str, file_hash: str)
             "actor": "SherDetect AI Engine",
             "note": f"{report.verdict} | Risk Score: {report.fraudRiskScore}% | {report.forensicSummary[:120]}",
         }).execute()
-
         return True
     except Exception as e:
         logger.error(f"Supabase write failed: {e}")
@@ -152,16 +148,29 @@ def _persist_to_supabase(report: ForensicReport, file_name: str, file_hash: str)
 
 @app.get("/health")
 def health():
-    """Health check — confirms server status and Supabase connectivity."""
+    """Health check — confirms server status, Redis, and Supabase connectivity."""
+    try:
+        redis_status = "connected" if celery_app.control.ping(timeout=0.5) else "unreachable"
+    except Exception:
+        redis_status = "offline"
+        
     return {
         "status": "online",
         "service": "SherDetect Forensic Backend API",
-        "version": "2.0.0",
+        "version": "2.0.1",
         "supabase": "connected" if supabase_client else "not_configured",
+        "redis_broker": redis_status
     }
 
 
-@app.post("/api/verify-document", response_model=ForensicReport)
+class JobResponse(BaseModel):
+    job_id: str
+    status: str
+    message: str
+    report: Optional[ForensicReport] = None
+
+
+@app.post("/api/verify-document")
 async def verify_document(file: UploadFile = File(...)):
     """
     Primary forensic verification endpoint.
@@ -219,33 +228,62 @@ async def verify_document(file: UploadFile = File(...)):
             cached = supabase_client.table("audit_reports").select("full_report_json").eq("file_hash", file_hash).limit(1).execute()
             if cached.data and cached.data[0].get("full_report_json"):
                 logger.info(f"Cache hit for {file_name} ({file_hash})")
-                return ForensicReport(**cached.data[0]["full_report_json"])
+                return JobResponse(
+                    job_id="cached", 
+                    status="completed", 
+                    message="Cache hit", 
+                    report=ForensicReport(**cached.data[0]["full_report_json"])
+                )
         except Exception as e:
             logger.warning(f"Cache check failed: {e}")
 
     try:
-        # ── Phase 1.1: Forward to AI Engine Microservice ─────────────────
-        ai_engine_url = os.getenv("AI_ENGINE_URL", "http://localhost:8000/api/verify-document")
+        # ── Phase 1.3: Save to staging and dispatch Celery Task ──────────────
+        staging_dir = os.path.join(ROOT_DIR, "backend", "storage", "staging")
+        os.makedirs(staging_dir, exist_ok=True)
+        job_id = str(uuid.uuid4())
+        file_path = os.path.join(staging_dir, f"{job_id}_{file_name}")
         
-        async with httpx.AsyncClient() as client:
-            files_payload = {"file": (file_name, contents, file.content_type or "application/octet-stream")}
-            response = await client.post(ai_engine_url, files=files_payload, timeout=120.0)
+        with open(file_path, "wb") as f:
+            f.write(contents)
             
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail=f"AI Engine failed: {response.text}")
-            
-        report_data = response.json()
-        report = ForensicReport(**report_data)
+        task = process_document_task.delay(
+            job_id, file_path, file_name, file.content_type or "application/octet-stream", file_hash
+        )
+        
+        logger.info(f"Dispatched Celery Task {task.id} for {file_name}")
+        
+        return JobResponse(
+            job_id=task.id,
+            status="processing",
+            message="Document dispatched to AI Engine background worker."
+        )
 
-        # ── Persist to Supabase ────────────────────────────────────────────────
-        _persist_to_supabase(report, file_name, file_hash)
-
-        return report
-
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Forensic analysis failed: {str(e)}")
+        logger.error(f"Failed to dispatch job: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to dispatch background job: {str(e)}")
+
+
+@app.get("/api/documents/status/{job_id}")
+def get_job_status(job_id: str):
+    """Polls Celery for the status of an async AI Engine job."""
+    from celery.result import AsyncResult
+    
+    result = AsyncResult(job_id, app=celery_app)
+    
+    if result.state == "PENDING":
+        return {"status": "processing", "message": "Waiting for AI worker capacity..."}
+    elif result.state == "STARTED":
+        return {"status": "processing", "message": "AI Engine is analyzing the document..."}
+    elif result.state == "SUCCESS":
+        data = result.result
+        if "error" in data:
+            return {"status": "failed", "error": data["error"]}
+        return {"status": "completed", "report": data}
+    elif result.state == "FAILURE":
+        return {"status": "failed", "error": str(result.info)}
+    else:
+        return {"status": result.state}
 
 
 class DecisionRequest(BaseModel):
