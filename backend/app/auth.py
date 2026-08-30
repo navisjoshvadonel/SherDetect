@@ -46,6 +46,6 @@ def require_officer_role(user: dict = Depends(get_current_user)):
     
     if role != "officer":
         logger.warning(f"Access denied for user {user.get('sub')} - insufficient role: {role}")
-        raise HTTPException(status_code=403, detail="Forbidden: Reviewer Officer privileges required.")
+        raise HTTPException(status_code=403, detail="u dont have access towards this page")
     
     return user
