@@ -1,28 +1,21 @@
 import io
 import os
 import time
+import tempfile
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image
 
-from ai_engine.ela_engine import compute_ela_and_anomalies
-from ai_engine.ai_validator import validate_document_semantics
-from ai_engine.benford_inspector import BenfordInspector
-from ai_engine.checksum_validator import ChecksumValidator
-from ai_engine.metadata_scanner import MetadataScanner
-from ai_engine.sharpness_inspector import SharpnessInspector
-from ai_engine.pii_sanitizer import PIISanitizer
-from ai_engine.risk_scorer import RiskScorer
+from ai_engine.core_processor import process_document_bytes
+from ai_engine.tasks import process_batch_zip_task, celery_app
 from ai_engine.sample_generator import SampleGenerator
-from ai_engine.document_text import extract_document_text
 from ai_engine.logger import setup_logger
 
 logger = setup_logger("SherDetect.AIEngine")
 
 app = FastAPI(
     title="SherDetect AI Forensic Engine API",
-    description="Live Python Forensic Engine providing ELA heatmaps, Metadata EXIF scanning, Sharpness inconsistency, Benford analysis, math checksums, and Gemini AI semantic validation.",
-    version="1.1.0",
+    description="Live Python Forensic Engine with Celery Batch Queueing.",
+    version="1.2.0",
 )
 
 ALLOWED_ORIGINS_ENV = os.getenv(
@@ -41,7 +34,7 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "SherDetect AI Forensic Engine", "version": "1.1.0"}
+    return {"status": "ok", "service": "SherDetect AI Forensic Engine", "version": "1.2.0"}
 
 @app.get("/api/sample-documents")
 def get_demo_samples():
@@ -63,23 +56,17 @@ def get_demo_samples():
     }
 
 MAX_FILE_SIZE_MB = 50
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 @app.post("/api/verify-document")
 async def verify_document(file: UploadFile = File(...)):
     start_time = time.time()
     try:
-        MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-
-        # 1. Immediate rejection via Content-Length header if present
         content_length = file.headers.get("content-length")
         if content_length and content_length.isdigit():
             if int(content_length) > MAX_FILE_SIZE_BYTES:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"File exceeds maximum allowed limit of {MAX_FILE_SIZE_MB} MB.",
-                )
+                raise HTTPException(status_code=413, detail=f"File exceeds {MAX_FILE_SIZE_MB} MB limit.")
 
-        # 2. Chunked streaming read with byte quota guard
         byte_chunks = []
         total_bytes = 0
         chunk_size = 1024 * 1024
@@ -90,96 +77,73 @@ async def verify_document(file: UploadFile = File(...)):
                 break
             total_bytes += len(chunk)
             if total_bytes > MAX_FILE_SIZE_BYTES:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"File exceeds maximum allowed limit of {MAX_FILE_SIZE_MB} MB.",
-                )
+                raise HTTPException(status_code=413, detail=f"File exceeds {MAX_FILE_SIZE_MB} MB limit.")
             byte_chunks.append(chunk)
 
         contents = b"".join(byte_chunks)
         file_name = file.filename or "uploaded_document.pdf"
-        doc_id = f"DOC-{int(time.time()) % 10000:04d}"
         
-        # Calculate SHA-256 Cryptographic Hash (Immutable Audit Trail)
-        import hashlib
-        file_hash = hashlib.sha256(contents).hexdigest()
-        
-        # 0. Convert PDF to Image for visual analysis (if applicable)
-        image_contents = contents
-        converted_image_base64 = None
-        if file.content_type == "application/pdf" or file_name.lower().endswith(".pdf"):
-            try:
-                import fitz
-                import base64
-                doc = fitz.open(stream=contents, filetype="pdf")
-                page = doc.load_page(0)
-                pix = page.get_pixmap(dpi=150)
-                image_contents = pix.tobytes("png")
-                converted_image_base64 = f"data:image/png;base64,{base64.b64encode(image_contents).decode()}"
-            except Exception as e:
-                logger.error(f"Failed to convert PDF to image: {e}")
-
-        # 1. Binary Stream & EXIF Metadata Tamper Scan
-        metadata_res = MetadataScanner.scan_bytes(contents)
-
-        # 2. ELA & Anomaly Bounding Box Detection
-        try:
-            ela_score, heatmap_base64, anomalies = compute_ela_and_anomalies(image_contents)
-        except Exception:
-            # ELA is image-only. Do not invent a score or anomaly for PDFs.
-            ela_score = 0.0
-            anomalies = []
-            heatmap_base64 = None
-
-        # 3. Laplacian Variance Edge Sharpness Inconsistency Inspection
-        sharpness_res = SharpnessInspector.analyze_sharpness_inconsistency(image_contents)
-        if sharpness_res["hasSharpnessAnomaly"]:
-            anomalies.extend(sharpness_res["detectedAnomalies"])
-
-        # 4. Text extraction simulation & PII sanitization
-        extracted_text = extract_document_text(contents, file.content_type)
-        if not extracted_text:
-            extracted_text = "No machine-readable document text was available for semantic audit."
-        sanitized_text, _ = PIISanitizer.sanitize(extracted_text)
-
-        # 5. Checksum Arithmetic & Benford Analysis
-        checksum_res = ChecksumValidator.audit_document_ids(sanitized_text)
-        benford_res = BenfordInspector.analyze_benford(sanitized_text)
-
-        # 6. Gemini AI Semantic Validation
-        ai_res = await validate_document_semantics(
-            sanitized_text,
-            "image/png" if converted_image_base64 else (file.content_type or "unknown"),
-            image_contents,
+        # Use the decoupled core processor (runs synchronously in the API here)
+        report = await process_document_bytes(
+            contents=contents, 
+            file_name=file_name, 
+            content_type=file.content_type,
+            start_time=start_time
         )
-
-        processing_time_ms = int((time.time() - start_time) * 1000)
-
-        # Combine detected software signatures
-        detected_software = metadata_res.get("detectedSoftware")
-        is_metadata_tampered = metadata_res["isMetadataTampered"] or checksum_res["hasChecksumAnomaly"]
-
-        # 7. Combined Risk Scoring via RiskScorer
-        report = RiskScorer.aggregate_forensic_report(
-            document_id=doc_id,
-            ela_score=ela_score,
-            pixel_anomalies=anomalies,
-            heatmap_b64=heatmap_base64,
-            semantic_result=ai_res,
-            benford_result=benford_res,
-            metadata_tampered=is_metadata_tampered,
-            software_detected=detected_software,
-            sharpness_result=sharpness_res,
-            processing_time_ms=processing_time_ms,
-            file_hash=file_hash
-        )
-        
-        if converted_image_base64:
-            report["previewUrl"] = converted_image_base64
-
         return report
     except Exception as e:
+        logger.error(f"Error in verify_document: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/batch-verify")
+async def batch_verify(file: UploadFile = File(...)):
+    """
+    Accepts a ZIP archive of documents, saves it temporarily, and dispatches a Celery task.
+    """
+    try:
+        if not file.filename.lower().endswith('.zip'):
+            raise HTTPException(status_code=400, detail="Batch verify requires a .zip file format.")
+            
+        # Create a temporary file to hold the zip
+        temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+        try:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                temp_zip.write(chunk)
+        finally:
+            temp_zip.close()
+            
+        # Dispatch Celery background task
+        task = process_batch_zip_task.delay(temp_zip.name)
+        
+        return {
+            "status": "queued",
+            "message": "Batch processing job has been queued successfully.",
+            "batchTaskId": task.id
+        }
+    except Exception as e:
+        logger.error(f"Error in batch_verify: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/task-status/{task_id}")
+def get_task_status(task_id: str):
+    """
+    Polls the Redis Celery backend for the status of a specific task.
+    """
+    task_result = celery_app.AsyncResult(task_id)
+    response = {
+        "taskId": task_id,
+        "status": task_result.status,
+    }
+    
+    if task_result.status == "SUCCESS":
+        response["result"] = task_result.result
+    elif task_result.status == "FAILURE":
+        response["error"] = str(task_result.info)
+        
+    return response
 
 if __name__ == "__main__":
     import uvicorn
