@@ -17,6 +17,9 @@ import {
 import { MOCK_FORGERY_REPORT, MOCK_AUTHENTIC_REPORT } from "@/contracts/mock-data";
 import { ForensicReport } from "@/contracts/api-spec";
 
+// Mock token generated with the default SUPABASE_JWT_SECRET for local hackathon testing
+const MOCK_OFFICER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJtb2NrLW9mZmljZXIiLCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFwcF9tZXRhZGF0YSI6eyJyb2xlIjoib2ZmaWNlciJ9fQ.VQAgtV6Z4r2F7tZft6n3HxaTHi8aSRR_eaKSDC-zS_0";
+
 export default function ForensicDashboard() {
   const [currentRole, setCurrentRole] = useState<"customer" | "officer">("customer");
   const [domainFilter, setDomainFilter] = useState<string>("all");
@@ -275,7 +278,10 @@ export default function ForensicDashboard() {
     try {
       await fetch(`${backendUrl}/api/documents/${docId}/decision`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${MOCK_OFFICER_TOKEN}`
+        },
         body: JSON.stringify({
           decision: decision,
           notes: notes,
