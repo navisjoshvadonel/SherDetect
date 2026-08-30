@@ -35,7 +35,7 @@ import hashlib
 import httpx
 from typing import Optional
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -50,7 +50,8 @@ from pydantic import BaseModel, Field
 from contracts.api_spec import (
     ForensicReport, ForensicBreakdown, AnomalyBoundingBox
 )
-from app.logger import setup_logger
+from backend.app.logger import setup_logger
+from backend.app.auth import get_current_user, require_officer_role
 
 logger = setup_logger("SherDetect.Main")
 
@@ -257,6 +258,7 @@ class DecisionRequest(BaseModel):
 def get_audit_history(
     limit: int = Query(default=20, ge=1, le=100),
     verdict: Optional[str] = Query(default=None),
+    current_user: dict = Depends(require_officer_role)
 ):
     """
     Retrieves persisted audit history from Supabase.
@@ -279,7 +281,11 @@ def get_audit_history(
 
 
 @app.post("/api/documents/{doc_id}/decision")
-def record_decision(doc_id: str, payload: DecisionRequest):
+def record_decision(
+    doc_id: str, 
+    payload: DecisionRequest,
+    current_officer: dict = Depends(require_officer_role)
+):
     """
     Records a reviewer officer verification decision in Supabase/audit trail.
     """

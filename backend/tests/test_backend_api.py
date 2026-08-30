@@ -19,7 +19,49 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from backend.app.main import app
+from backend.app.auth import require_officer_role
 from ai_engine.sample_generator import SampleGenerator
+from unittest.mock import patch, AsyncMock, MagicMock
+
+def mock_get_current_user():
+    return {"sub": "test-user-id", "app_metadata": {"role": "officer"}}
+
+app.dependency_overrides[require_officer_role] = mock_get_current_user
+
+# Pytest fixture to mock the decoupled AI Engine microservice call
+@pytest.fixture(autouse=True)
+def mock_httpx_post():
+    async def side_effect_post(*args, **kwargs):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        
+        files = kwargs.get("files")
+        file_name = files["file"][0] if files and "file" in files else "test.jpg"
+        is_forged = "edited" in file_name or "customer_upload.pdf" in file_name
+        
+        score = 85.0 if is_forged else 10.0
+        verdict = "FORGERY_DETECTED" if is_forged else "VERIFIED_AUTHENTIC"
+        
+        mock_resp.json.return_value = {
+            "documentId": "DOC-TEST",
+            "isAuthentic": not is_forged,
+            "fraudRiskScore": score,
+            "verdict": verdict,
+            "forensicBreakdown": {
+                "elaScore": score,
+                "metadataTampered": is_forged,
+                "softwareFingerprintDetected": "Mocked",
+                "semanticDiscrepancy": is_forged
+            },
+            "detectedAnomalies": [],
+            "tamperHeatmapBase64": None,
+            "forensicSummary": "Mocked",
+            "processingTimeMs": 100
+        }
+        return mock_resp
+
+    with patch("httpx.AsyncClient.post", side_effect=side_effect_post) as mock_post:
+        yield mock_post
 
 
 def test_health_endpoint():
