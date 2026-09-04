@@ -67,6 +67,8 @@ from ai_engine.compliance_engine import (
 )
 from ai_engine.benchmark_evaluator import SectorBenchmarkEvaluator
 from ai_engine.model_feedback_tuner import ModelFeedbackTuner, MODEL_LINEAGE_METADATA
+from ai_engine.telemetry import APMTracingMiddleware
+from ai_engine.metrics_alerting import MetricsCollector, AlertingEngine
 
 logger = setup_logger("SherDetect.Main")
 
@@ -96,8 +98,9 @@ app = FastAPI(
     ),
 )
 
-# ── Enterprise Security Headers Middleware ────────────────────────────────────
+# ── Enterprise Security Headers & APM Tracing Middleware ───────────────────────
 app.add_middleware(EnterpriseSecurityHeadersMiddleware)
+app.add_middleware(APMTracingMiddleware)
 
 # ── Security & CORS Configuration (Strict Parsing, No Wildcards) ──────────────
 ALLOWED_ORIGINS_ENV = os.getenv(
@@ -497,6 +500,29 @@ def get_feedback_calibration(
     return {
         "model_metadata": MODEL_LINEAGE_METADATA,
         "calibration": ModelFeedbackTuner.compute_weight_calibration_recommendations()
+    }
+
+
+@app.get("/metrics")
+def get_prometheus_metrics():
+    """
+    Prometheus Metrics exposition endpoint.
+    Shipped to Datadog / Prometheus / CloudWatch collectors.
+    """
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(MetricsCollector.generate_prometheus_metrics())
+
+
+@app.get("/api/governance/alerts")
+def get_system_alerts(
+    current_user: dict = Depends(require_officer_role)
+):
+    """
+    Returns active system health alerts for PagerDuty / Datadog integrations.
+    """
+    return {
+        "active_alerts": AlertingEngine.evaluate_active_alerts(),
+        "evaluated_at": time.strftime("%Y-%m-%d %H:%M:%S GMT", time.gmtime())
     }
 
 
