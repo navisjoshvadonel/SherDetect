@@ -197,3 +197,38 @@ class RiskScorer:
             "forensicSummary": summary,
             "processingTimeMs": processing_time_ms
         }
+
+
+def compute_forensic_verdict(
+    ela_score: float,
+    metadata_tampered: bool,
+    sharpness_variance: float,
+    benford_kl_divergence: float,
+    has_checksum_anomaly: bool,
+    semantic_discrepancy: bool
+) -> Dict[str, Any]:
+    """
+    Standalone verdict calculator for benchmark evaluation and adversarial testing.
+    """
+    report = RiskScorer.aggregate_forensic_report(
+        document_id="BENCHMARK-DOC",
+        ela_score=ela_score,
+        pixel_anomalies=[],
+        heatmap_b64=None,
+        semantic_result={
+            "semanticDiscrepancy": semantic_discrepancy,
+            "detectedAnomalies": [{"type": "ID_CHECKSUM_FAILURE"}] if has_checksum_anomaly else []
+        },
+        benford_result={"anomalyRiskScore": benford_kl_divergence * 100.0, "isBenfordAnomaly": benford_kl_divergence > 0.20},
+        metadata_tampered=metadata_tampered,
+        software_detected="Adobe Photoshop" if metadata_tampered else None,
+        sharpness_result={"hasSharpnessAnomaly": sharpness_variance > 50.0},
+        processing_time_ms=10
+    )
+    return {
+        "verdict": report["verdict"],
+        "score": report["fraudRiskScore"],
+        "isAuthentic": report["isAuthentic"],
+        "humanReviewRecommended": report["verdict"] == "SUSPICIOUS"
+    }
+

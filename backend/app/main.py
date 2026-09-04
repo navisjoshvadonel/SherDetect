@@ -65,6 +65,8 @@ from ai_engine.compliance_engine import (
     GDPRErasureEngine,
     ExplainabilityReportGenerator
 )
+from ai_engine.benchmark_evaluator import SectorBenchmarkEvaluator
+from ai_engine.model_feedback_tuner import ModelFeedbackTuner, MODEL_LINEAGE_METADATA
 
 logger = setup_logger("SherDetect.Main")
 
@@ -473,6 +475,29 @@ def get_explainability_artifact(
             logger.error(f"Failed to fetch record for explanation: {e}")
 
     return ExplainabilityReportGenerator.generate_explanation_artifact(report_data)
+
+
+@app.get("/api/governance/benchmarks")
+def get_sector_benchmarks(
+    current_user: dict = Depends(require_officer_role)
+):
+    """
+    Returns empirical sector-specific Precision, Recall, F1, and Regional Fairness benchmarks.
+    """
+    return SectorBenchmarkEvaluator.evaluate_sector_performance()
+
+
+@app.get("/api/governance/feedback-calibration")
+def get_feedback_calibration(
+    current_user: dict = Depends(require_officer_role)
+):
+    """
+    Analyzes verifier human-in-the-loop overrides and proposes weight calibration adjustments.
+    """
+    return {
+        "model_metadata": MODEL_LINEAGE_METADATA,
+        "calibration": ModelFeedbackTuner.compute_weight_calibration_recommendations()
+    }
 
 
 if __name__ == "__main__":
