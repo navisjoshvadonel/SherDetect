@@ -36,17 +36,23 @@ def process_document_task(self, job_id: str, file_path: str, file_name: str, con
         with open(file_path, "rb") as f:
             contents = f.read()
 
-        # 2. Forward to AI Engine microservice (synchronously)
+        # 2. Forward to AI Engine microservice (or direct Python fallback)
         ai_engine_url = os.getenv("AI_ENGINE_URL", "http://localhost:8000/api/verify-document")
-        files_payload = {"file": (file_name, contents, content_type)}
-        
-        response = requests.post(ai_engine_url, files=files_payload, timeout=180.0)
-            
-        if response.status_code != 200:
-            logger.error(f"AI Engine failed: {response.text}")
-            return {"error": f"AI Engine failed: {response.text}"}
-            
-        report_data = response.json()
+        report_data = None
+
+        try:
+            files_payload = {"file": (file_name, contents, content_type)}
+            response = requests.post(ai_engine_url, files=files_payload, timeout=5.0)
+            if response.status_code == 200:
+                report_data = response.json()
+        except Exception as http_err:
+            logger.info(f"AI Engine HTTP service unreachable ({http_err}). Executing direct core processor analysis.")
+
+        if not report_data:
+            import asyncio
+            from ai_engine.core_processor import process_document_bytes
+            report_data = asyncio.run(process_document_bytes(contents, file_name, content_type))
+
         report = ForensicReport(**report_data)
 
         # 3. Persist to Supabase Storage & Database
