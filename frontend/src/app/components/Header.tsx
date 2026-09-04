@@ -74,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <i className="fa-solid fa-user-check me-1 text-brutal-black"></i>
-              Verifier / Reviewer View
+              Verifier View
               <span
                 className={`ml-1 px-1.5 py-0.2 rounded-full text-[9.5px] font-black border border-brutal-black shadow-brutal-sm transition-all ${
                   pendingCount > 0
@@ -85,6 +85,22 @@ export const Header: React.FC<HeaderProps> = ({
                 {pendingCount}
               </span>
             </button>
+
+            <a
+              href="/batch-verify"
+              className="neo-btn px-3 py-1 text-xs font-black uppercase bg-brutal-purple text-brutal-black hover:scale-102 flex items-center gap-1 shadow-brutal-sm"
+            >
+              <i className="fa-solid fa-layer-group text-brutal-black"></i>
+              Batch Upload
+            </a>
+
+            <a
+              href="/admin-console"
+              className="neo-btn px-3 py-1 text-xs font-black uppercase bg-brutal-cyan text-brutal-black hover:scale-102 flex items-center gap-1 shadow-brutal-sm"
+            >
+              <i className="fa-solid fa-gears text-brutal-black"></i>
+              Admin Console
+            </a>
           </div>
         </div>
       </div>

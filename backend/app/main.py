@@ -69,6 +69,8 @@ from ai_engine.benchmark_evaluator import SectorBenchmarkEvaluator
 from ai_engine.model_feedback_tuner import ModelFeedbackTuner, MODEL_LINEAGE_METADATA
 from ai_engine.telemetry import APMTracingMiddleware
 from ai_engine.metrics_alerting import MetricsCollector, AlertingEngine
+from ai_engine.tenant_config import TenantManager, TenantConfig
+from backend.app.webhooks import WebhookDispatcher
 
 logger = setup_logger("SherDetect.Main")
 
@@ -540,6 +542,57 @@ def get_system_alerts(
         "active_alerts": AlertingEngine.evaluate_active_alerts(),
         "evaluated_at": time.strftime("%Y-%m-%d %H:%M:%S GMT", time.gmtime())
     }
+
+
+@app.get("/api/tenant/config")
+def get_tenant_config(
+    tenant_id: str = Query(default="default"),
+    current_user: dict = Depends(require_officer_role)
+):
+    """Returns multi-tenancy configuration and sector risk thresholds."""
+    return TenantManager.get_tenant_config(tenant_id)
+
+
+@app.post("/api/tenant/config")
+def update_tenant_config(
+    config: TenantConfig,
+    current_user: dict = Depends(require_officer_role)
+):
+    """Registers or updates sector risk thresholds and localization settings for a tenant."""
+    updated = TenantManager.register_or_update_tenant(config)
+    return {"status": "SUCCESS", "config": updated}
+
+
+@app.get("/api/audit-history/export")
+def export_audit_history(
+    format: str = Query(default="csv"),
+    current_user: dict = Depends(require_officer_role)
+):
+    """
+    Exports compliance audit records formatted as CSV or JSON for regulators.
+    """
+    from fastapi.responses import Response
+    history = get_audit_history(limit=50, current_user=current_user)
+    records = history.get("records", [])
+
+    if format.lower() == "csv":
+        import csv
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Timestamp", "Document_ID", "File_Name", "Verdict", "Risk_Score", "ELA_Score", "Metadata_Tampered"])
+        for r in records:
+            writer.writerow([
+                r.get("created_at", ""),
+                r.get("document_id", ""),
+                r.get("file_name", ""),
+                r.get("verdict", ""),
+                r.get("fraud_risk_score", 0.0),
+                r.get("ela_score", 0.0),
+                r.get("metadata_tampered", False)
+            ])
+        return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=sherdetect_audit_export.csv"})
+    
+    return history
 
 
 if __name__ == "__main__":
