@@ -32,6 +32,7 @@ import os
 import time
 import uuid
 import hashlib
+import io
 import httpx
 from typing import Optional, Dict, Any, List
 
