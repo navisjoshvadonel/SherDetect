@@ -24,6 +24,7 @@ export interface ForensicReport {
   forensicBreakdown: ForensicBreakdown;
   detectedAnomalies: AnomalyBoundingBox[];
   tamperHeatmapBase64?: string;
+  fileHash?: string;
   forensicSummary: string;
   processingTimeMs: number;
 }

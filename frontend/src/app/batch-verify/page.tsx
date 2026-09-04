@@ -29,10 +29,11 @@ export default function BatchVerifyPage() {
 
   const handleFileDrop = (e: React.DragEvent<HTMLDivElement> | React.ChangeEvent<HTMLInputElement>) => {
     let files: File[] = [];
+    const target = e.target as HTMLInputElement;
     if ("dataTransfer" in e && e.dataTransfer.files) {
       files = Array.from(e.dataTransfer.files);
-    } else if ("target" in e && e.target.files) {
-      files = Array.from(e.target.files);
+    } else if (target && target.files) {
+      files = Array.from(target.files);
     }
 
     if (files.length === 0) return;
