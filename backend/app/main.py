@@ -54,6 +54,12 @@ from backend.app.logger import setup_logger
 from backend.app.auth import get_current_user, require_officer_role
 from backend.app.celery_app import celery_app
 from backend.app.tasks import process_document_task
+from ai_engine.security_guards import (
+    validate_file_security,
+    rate_limiter,
+    EnterpriseSecurityHeadersMiddleware,
+    parse_strict_cors_origins,
+)
 
 logger = setup_logger("SherDetect.Main")
 
@@ -83,12 +89,15 @@ app = FastAPI(
     ),
 )
 
-# ── Security & CORS Configuration ─────────────────────────────────────────────
+# ── Enterprise Security Headers Middleware ────────────────────────────────────
+app.add_middleware(EnterpriseSecurityHeadersMiddleware)
+
+# ── Security & CORS Configuration (Strict Parsing, No Wildcards) ──────────────
 ALLOWED_ORIGINS_ENV = os.getenv(
     "ALLOWED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
 )
-ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS_ENV.split(",") if origin.strip()]
+ALLOWED_ORIGINS = parse_strict_cors_origins(ALLOWED_ORIGINS_ENV)
 
 app.add_middleware(
     CORSMiddleware,
@@ -162,6 +171,20 @@ def health():
         "redis_broker": redis_status
     }
 
+@app.get("/health/liveness")
+def liveness_probe():
+    """Kubernetes / Container Liveness Probe — confirms process is responsive."""
+    return {"status": "alive", "timestamp": time.time()}
+
+@app.get("/health/readiness")
+def readiness_probe():
+    """Kubernetes / Container Readiness Probe — confirms service is ready for traffic."""
+    return {
+        "status": "ready",
+        "circuit_breaker": "healthy",
+        "timestamp": time.time()
+    }
+
 
 class JobResponse(BaseModel):
     job_id: str
@@ -171,7 +194,7 @@ class JobResponse(BaseModel):
 
 
 @app.post("/api/verify-document")
-async def verify_document(file: UploadFile = File(...)):
+async def verify_document(request: Request, file: UploadFile = File(...)):
     """
     Primary forensic verification endpoint.
 
@@ -179,6 +202,10 @@ async def verify_document(file: UploadFile = File(...)):
     Runs the full 6-layer forensic pipeline and persists results to Supabase.
     Returns a ForensicReport strictly matching contracts/api_spec.py.
     """
+    # ── Rate Limiting Guard ───────────────────────────────────────────────────
+    client_ip = request.client.host if request.client else "unknown"
+    rate_limiter.check_rate_limit(client_ip)
+
     start_time = time.time()
 
     # ── Validate content type ─────────────────────────────────────────────────
@@ -218,7 +245,10 @@ async def verify_document(file: UploadFile = File(...)):
         byte_chunks.append(chunk)
 
     contents = b"".join(byte_chunks)
-    file_name = file.filename or "uploaded_document.bin"
+    raw_name = file.filename or "uploaded_document.bin"
+    
+    # ── Security Guard: Magic Byte Sniffing & Path Traversal Guard ────────────
+    file_name = validate_file_security(contents, raw_name, file.content_type)
     
     # ── Phase 1.2: File Hashing & Deduplication (Caching) ───────────────
     file_hash = hashlib.sha256(contents).hexdigest()

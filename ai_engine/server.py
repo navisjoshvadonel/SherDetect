@@ -2,27 +2,37 @@ import io
 import os
 import time
 import tempfile
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from ai_engine.core_processor import process_document_bytes
 from ai_engine.tasks import process_batch_zip_task, celery_app
 from ai_engine.sample_generator import SampleGenerator
 from ai_engine.logger import setup_logger
+from ai_engine.security_guards import (
+    validate_file_security,
+    rate_limiter,
+    EnterpriseSecurityHeadersMiddleware,
+    parse_strict_cors_origins,
+)
 
 logger = setup_logger("SherDetect.AIEngine")
 
 app = FastAPI(
     title="SherDetect AI Forensic Engine API",
-    description="Live Python Forensic Engine with Celery Batch Queueing.",
-    version="1.2.0",
+    description="Live Enterprise Python Forensic Engine with Security Guards & Celery Queueing.",
+    version="2.0.0",
 )
 
+# ── Enterprise Security Headers Middleware ────────────────────────────────────
+app.add_middleware(EnterpriseSecurityHeadersMiddleware)
+
+# ── Strict CORS Policy (No Wildcards) ─────────────────────────────────────────
 ALLOWED_ORIGINS_ENV = os.getenv(
     "ALLOWED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
 )
-ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS_ENV.split(",") if origin.strip()]
+ALLOWED_ORIGINS = parse_strict_cors_origins(ALLOWED_ORIGINS_ENV)
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,7 +69,11 @@ MAX_FILE_SIZE_MB = 50
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 @app.post("/api/verify-document")
-async def verify_document(file: UploadFile = File(...)):
+async def verify_document(request: Request, file: UploadFile = File(...)):
+    # ── 1. Rate Limiting Check ────────────────────────────────────────────────
+    client_ip = request.client.host if request.client else "unknown"
+    rate_limiter.check_rate_limit(client_ip)
+
     start_time = time.time()
     try:
         content_length = file.headers.get("content-length")
@@ -81,16 +95,21 @@ async def verify_document(file: UploadFile = File(...)):
             byte_chunks.append(chunk)
 
         contents = b"".join(byte_chunks)
-        file_name = file.filename or "uploaded_document.pdf"
+        raw_name = file.filename or "uploaded_document.pdf"
         
+        # ── 2. Security Guard: Magic Bytes & Extension Check ─────────────────
+        clean_file_name = validate_file_security(contents, raw_name, file.content_type)
+
         # Use the decoupled core processor (runs synchronously in the API here)
         report = await process_document_bytes(
             contents=contents, 
-            file_name=file_name, 
+            file_name=clean_file_name, 
             content_type=file.content_type,
             start_time=start_time
         )
         return report
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in verify_document: {e}")
         raise HTTPException(status_code=500, detail=str(e))

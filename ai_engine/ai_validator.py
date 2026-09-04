@@ -11,7 +11,9 @@ Powered by the official modern `google-genai` SDK.
 import os
 import re
 import json
-from typing import Dict, Any, List
+import time
+import asyncio
+from typing import Dict, Any, List, Optional
 from google import genai
 from dotenv import load_dotenv
 
@@ -31,6 +33,50 @@ if api_key:
         _genai_client = genai.Client(api_key=api_key)
     except Exception as err:
         logger.error(f"Gemini client setup notice: {err}")
+
+
+# ── Circuit Breaker Pattern for External Gemini LLM Layer ──────────────────
+class GeminiCircuitBreaker:
+    """
+    Prevents external Gemini LLM latency or outage from blocking the 5 deterministic layers.
+    States:
+      - CLOSED: Healthy operation.
+      - OPEN: Tripped after 3 consecutive failures. Immediately routes to offline fallback.
+      - HALF-OPEN: Testing recovery after 30-second cooldown.
+    """
+    def __init__(self, max_failures: int = 3, cooldown_seconds: float = 30.0):
+        self.max_failures = max_failures
+        self.cooldown_seconds = cooldown_seconds
+        self.failure_count = 0
+        self.state = "CLOSED"  # CLOSED, OPEN, HALF-OPEN
+        self.last_state_change = time.time()
+
+    def allow_request(self) -> bool:
+        now = time.time()
+        if self.state == "OPEN":
+            if now - self.last_state_change > self.cooldown_seconds:
+                self.state = "HALF-OPEN"
+                self.last_state_change = now
+                logger.info("Gemini Circuit Breaker transitioning to HALF-OPEN (testing API recovery).")
+                return True
+            return False
+        return True
+
+    def record_success(self):
+        self.failure_count = 0
+        if self.state != "CLOSED":
+            self.state = "CLOSED"
+            self.last_state_change = time.time()
+            logger.info("Gemini Circuit Breaker RESET to CLOSED (API recovered).")
+
+    def record_failure(self):
+        self.failure_count += 1
+        if self.failure_count >= self.max_failures:
+            self.state = "OPEN"
+            self.last_state_change = time.time()
+            logger.warning(f"Gemini Circuit Breaker TRIPPED to OPEN after {self.failure_count} failures. Using offline fallback for {self.cooldown_seconds}s.")
+
+gemini_circuit_breaker = GeminiCircuitBreaker()
 
 
 # ---------------------------------------------------------------------------
@@ -250,18 +296,29 @@ async def validate_document_semantics(
     document_bytes: bytes | None = None,
 ) -> Dict[str, Any]:
     """
-    Validates document semantics using modern Gemini 2.5/1.5 Flash via `google.genai` with PII protection.
-    Falls back to deterministic offline heuristics on any API/network failure.
+    Validates document semantics using modern Gemini 1.5 Flash via `google.genai` with PII protection.
+    Protected by Circuit Breaker & Exponential Backoff Retry.
+    Falls back to deterministic offline heuristics on any API/network failure or open circuit breaker.
     """
     # Privacy safeguard: Scrub citizen PII before processing
     sanitized_text, _ = PIISanitizer.sanitize(document_text)
 
-    # If no API key configured or client failed, use offline fallback directly
+    # 1. Direct fallback if API key missing or client setup failed
     if not api_key or not _genai_client:
         return extract_fallback_heuristics(sanitized_text, file_format)
 
-    try:
-        prompt = f"""
+    # 2. Circuit Breaker Guard: If circuit is OPEN, route directly to offline heuristics
+    if not gemini_circuit_breaker.allow_request():
+        logger.info("Gemini Circuit Breaker is OPEN. Routing directly to offline heuristics (Layer 6 bypass).")
+        return extract_fallback_heuristics(sanitized_text, file_format)
+
+    # 3. Retry loop with exponential backoff (up to 2 retries)
+    max_retries = 2
+    backoff_delays = [0.5, 1.5]
+
+    for attempt in range(max_retries + 1):
+        try:
+            prompt = f"""
     Act as a document classification AI specializing in certificate fraud.
     The observed file format is {file_format}, but format, resolution, compression,
     lighting, and vector cleanliness are NEVER evidence of authenticity.
@@ -307,28 +364,37 @@ Respond ONLY with a valid JSON object matching this schema:
   "forensicSummary": "Concise forensic summary of findings"
 }}
 """
-        contents: Any = prompt
-        if document_bytes and file_format in {"image/jpeg", "image/png", "application/pdf"}:
-            contents = [
-                prompt,
-                genai.types.Part.from_bytes(data=document_bytes, mime_type=file_format),
-            ]
-        response = _genai_client.models.generate_content(model="gemini-1.5-flash", contents=contents)
-        raw_text = response.text.strip() if response and response.text else ""
+            contents: Any = prompt
+            if document_bytes and file_format in {"image/jpeg", "image/png", "application/pdf"}:
+                contents = [
+                    prompt,
+                    genai.types.Part.from_bytes(data=document_bytes, mime_type=file_format),
+                ]
+            response = _genai_client.models.generate_content(model="gemini-1.5-flash", contents=contents)
+            raw_text = response.text.strip() if response and response.text else ""
 
-        # Resilient JSON extraction
-        json_match = re.search(r"\{.*\}", raw_text, re.DOTALL)
-        if json_match:
-            parsed = json.loads(json_match.group(0))
-            parsed["source"] = "gemini_1.5_flash"
-            parsed.setdefault("file_format_observed", file_format)
-            parsed.setdefault("format_bias_mitigation", "File quality and format were ignored; content and issuer evidence were prioritized.")
-            parsed.setdefault("text_content_analysis", parsed.get("forensicSummary", "No additional textual findings were returned."))
-            parsed.setdefault("final_classification", "Forgery" if parsed.get("semanticDiscrepancy") else "Unverifiable")
-            parsed.setdefault("confidence_score", 0.0)
-            return parsed
-        else:
-            return extract_fallback_heuristics(sanitized_text, file_format)
-    except Exception:
-        # Fallback seamlessly on rate-limit, network error, or timeout
-        return extract_fallback_heuristics(sanitized_text, file_format)
+            # Resilient JSON extraction
+            json_match = re.search(r"\{.*\}", raw_text, re.DOTALL)
+            if json_match:
+                parsed = json.loads(json_match.group(0))
+                parsed["source"] = "gemini_1.5_flash"
+                parsed.setdefault("file_format_observed", file_format)
+                parsed.setdefault("format_bias_mitigation", "File quality and format were ignored; content and issuer evidence were prioritized.")
+                parsed.setdefault("text_content_analysis", parsed.get("forensicSummary", "No additional textual findings were returned."))
+                parsed.setdefault("final_classification", "Forgery" if parsed.get("semanticDiscrepancy") else "Unverifiable")
+                parsed.setdefault("confidence_score", 0.0)
+                
+                # Record successful execution to reset Circuit Breaker
+                gemini_circuit_breaker.record_success()
+                return parsed
+            else:
+                gemini_circuit_breaker.record_failure()
+                return extract_fallback_heuristics(sanitized_text, file_format)
+        except Exception as e:
+            logger.warning(f"Gemini API attempt {attempt + 1} failed: {e}")
+            gemini_circuit_breaker.record_failure()
+            if attempt < max_retries:
+                await asyncio.sleep(backoff_delays[attempt])
+
+    # All retries exhausted -> Return deterministic offline heuristics
+    return extract_fallback_heuristics(sanitized_text, file_format)
