@@ -304,6 +304,15 @@ async def verify_document(request: Request, file: UploadFile = File(...)):
         report_dict = process_document_task(
             job_id, file_path, file_name, file.content_type or "application/octet-stream", file_hash
         )
+        
+        # Handle error responses from process_document_task
+        if isinstance(report_dict, dict) and "error" in report_dict:
+            logger.error(f"Inline forensic analysis failed: {report_dict['error']}")
+            raise HTTPException(
+                status_code=500,
+                detail="Document processing failed. AI Engine is currently unavailable."
+            )
+        
         report_obj = ForensicReport(**report_dict) if isinstance(report_dict, dict) else report_dict
         _INLINE_JOBS_CACHE[job_id] = report_dict if isinstance(report_dict, dict) else report_obj.model_dump(mode="json")
         return JobResponse(
