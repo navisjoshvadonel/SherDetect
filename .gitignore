@@ -40,6 +40,7 @@ skills-lock.json
 backend/app/__pycache__/
 backend/app/services/__pycache__/
 
-# Supabase CLI temp files
+# Storage & Staging
+backend/storage/staging/
 supabase/.temp/
 
