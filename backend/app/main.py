@@ -60,6 +60,11 @@ from ai_engine.security_guards import (
     EnterpriseSecurityHeadersMiddleware,
     parse_strict_cors_origins,
 )
+from ai_engine.compliance_engine import (
+    CryptographicAuditTrail,
+    GDPRErasureEngine,
+    ExplainabilityReportGenerator
+)
 
 logger = setup_logger("SherDetect.Main")
 
@@ -355,10 +360,17 @@ def record_decision(
     current_officer: dict = Depends(require_officer_role)
 ):
     """
-    Records a reviewer officer verification decision in Supabase/audit trail.
+    Records a reviewer officer verification decision with SHA-256 chained immutability.
     """
     action = payload.decision
     note = payload.notes or f"Marked as {payload.decision} by {payload.reviewerName}"
+
+    chained_entry = CryptographicAuditTrail.create_chained_entry(
+        doc_id=doc_id,
+        action=action,
+        actor=payload.reviewerName or "Verifier Officer",
+        note=note
+    )
 
     if supabase_client:
         try:
@@ -367,6 +379,8 @@ def record_decision(
                 "action": action,
                 "actor": payload.reviewerName,
                 "note": note,
+                "previous_hash": chained_entry["previous_hash"],
+                "entry_hash": chained_entry["entry_hash"],
             }).execute()
         except Exception as e:
             logger.error(f"Supabase decision log error: {e}")
@@ -377,8 +391,88 @@ def record_decision(
         "decision": action,
         "reviewer": payload.reviewerName,
         "note": note,
+        "immutable_entry_hash": chained_entry["entry_hash"],
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
     }
+
+
+class GDPRErasureRequest(BaseModel):
+    documentId: str
+    requestedBy: str
+    reason: Optional[str] = "GDPR Article 17 Right-to-Erasure"
+
+
+@app.post("/api/privacy/gdpr-erasure")
+def request_gdpr_erasure(
+    payload: GDPRErasureRequest,
+    current_user: dict = Depends(require_officer_role)
+):
+    """
+    GDPR Article 17 & CCPA Right-to-Erasure Endpoint.
+    Scrubs document payload, PII, and returns a signed Erasure Certificate.
+    """
+    cert = GDPRErasureEngine.execute_erasure_request(
+        document_id=payload.documentId,
+        requested_by=payload.requestedBy,
+        reason=payload.reason or "GDPR Article 17 Right-to-Erasure Request"
+    )
+
+    if supabase_client:
+        try:
+            # Delete record from audit_reports table
+            supabase_client.table("audit_reports").delete().eq("document_id", payload.documentId).execute()
+            
+            # Log cryptographic deletion event to immutable audit chain
+            chained_entry = CryptographicAuditTrail.create_chained_entry(
+                doc_id=payload.documentId,
+                action="GDPR_ERASURE_EXECUTED",
+                actor=payload.requestedBy,
+                note=f"Permanent erasure executed. Cert ID: {cert['erasureCertificateId']}"
+            )
+            supabase_client.table("audit_trail").insert({
+                "doc_id": payload.documentId,
+                "action": "GDPR_ERASURE_EXECUTED",
+                "actor": payload.requestedBy,
+                "note": f"Permanent erasure executed. Cert ID: {cert['erasureCertificateId']}",
+                "previous_hash": chained_entry["previous_hash"],
+                "entry_hash": chained_entry["entry_hash"],
+            }).execute()
+        except Exception as e:
+            logger.error(f"Supabase GDPR erasure sync error: {e}")
+
+    return cert
+
+
+@app.get("/api/documents/{doc_id}/explanation")
+def get_explainability_artifact(
+    doc_id: str,
+    current_user: dict = Depends(require_officer_role)
+):
+    """
+    GDPR Article 22 & US FCPA Automated Decision Right-to-Explanation Certificate.
+    Generates a formal legal breakdown artifact explaining why a document was flagged.
+    """
+    report_data = {"documentId": doc_id, "fraudRiskScore": 5.0, "verdict": "VERIFIED_AUTHENTIC", "forensicBreakdown": {}}
+    if supabase_client:
+        try:
+            res = supabase_client.table("audit_reports").select("*").eq("document_id", doc_id).limit(1).execute()
+            if res.data:
+                record = res.data[0]
+                report_data = {
+                    "documentId": doc_id,
+                    "fraudRiskScore": record.get("fraud_risk_score", 0.0),
+                    "verdict": record.get("verdict", "UNKNOWN"),
+                    "forensicBreakdown": {
+                        "elaScore": record.get("ela_score", 0.0),
+                        "metadataTampered": record.get("metadata_tampered", False),
+                        "softwareFingerprintDetected": record.get("software_detected"),
+                        "semanticDiscrepancy": record.get("semantic_discrepancy", False),
+                    }
+                }
+        except Exception as e:
+            logger.error(f"Failed to fetch record for explanation: {e}")
+
+    return ExplainabilityReportGenerator.generate_explanation_artifact(report_data)
 
 
 if __name__ == "__main__":
